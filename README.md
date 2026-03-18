@@ -1,6 +1,6 @@
 # Five Nights at Epstein — TI-84 CE Port
 
-A port of [FNAE](https://github.com/WitheredFOT/FNAE-Local) to the TI-84 Plus CE calculator.
+A port of [FNAE](https://github.com/WitheredFOT/FNAE-Local) for the TI-84 Plus CE calculator.
 
 ---
 

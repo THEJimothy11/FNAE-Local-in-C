@@ -1,0 +1,61 @@
+# convimg.yaml
+# Run from the assets/ folder: convimg
+# Output: sprites/gfx.c and sprites/gfx.h
+
+palettes:
+  - name: global_palette
+    images: automatic
+
+converts:
+  - name: gfx
+    palette: global_palette
+    width-and-height: false
+    images:
+      - images/Cam1.png
+      - images/Cam2.png
+      - images/Cam3.png
+      - images/Cam4.png
+      - images/Cam5.png
+      - images/Cam6.png
+      - images/Cam7.png
+      - images/Cam8.png
+      - images/Cam9.png
+      - images/Cam10.png
+      - images/Cam11.png
+      - images/FNAE-Map-layout.png
+      - images/Warningheavy.png
+      - images/Warninglight.png
+      - images/cutscene.png
+      - images/enemyep1.png
+      - images/enemyep4.png
+      - images/ep1.png
+      - images/ep4.png
+      - images/exp2.png
+      - images/fa3.png
+      - images/front.png
+      - images/goldenstephen.png
+      - images/jump.png
+      - images/jumptrump.png
+      - images/menubackground.png
+      - images/mrstephen.png
+      - images/original.png
+      - images/scaryep.png
+      - images/scaryhawk.png
+      - images/scaryhawking.png
+      - images/scarytrump.png
+      - images/star.png
+      - images/trump.png
+      - images/trump2.png
+      - images/trump3.png
+      - images/trump4.png
+      - images/trump5.png
+      - images/winscreen.png
+
+outputs:
+  - type: c
+    include-file: gfx.h
+    directory: sprites
+    palettes:
+      - global_palette
+    converts:
+      - gfx

@@ -1,0 +1,28 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build FNAE",
+            "type": "shell",
+            "command": "make",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "Convert Sprites",
+            "type": "shell",
+            "command": "cd assets && convimg",
+            "group": "build"
+        },
+        {
+        "label": "Build and Run in CEmu",
+        "type": "shell",
+        "command": "make && CEmu --send bin/FNAE.8xp --execute FNAE",
+        "group": "build",
+        "dependsOn": "Build FNAE"
+        }
+    ]
+}

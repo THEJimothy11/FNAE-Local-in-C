@@ -1,0 +1,18 @@
+{
+    "configurations": [
+        {
+            "name": "CE",
+            "includePath": [
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/assets/sprites",
+                "C:/CEdev/include",
+                "C:/CEdev/include/sys"
+            ],
+            "defines": [],
+            "compilerPath": "C:/CEdev/bin/ez80-clang.exe",
+            "cStandard": "c11",
+            "intelliSenseMode": "clang-x64"
+        }
+    ],
+    "version": 4
+}
