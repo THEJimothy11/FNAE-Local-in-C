@@ -1,0 +1,76 @@
+# convimg.yaml
+# Sprite conversion config for the CE C/C++ Toolchain
+# Run: convimg  (in the project root)
+# Output: assets/sprites/gfx.c + gfx.h
+#
+# All source PNGs must be <= 320x240 and use <= 256 colours.
+# Resize originals before converting — the TI-84 CE screen is 320x240.
+
+converts:
+  - name: gfx
+    palette: xlibc         # built-in 256-colour CE palette
+    output-format: c
+    output-directory: assets/sprites
+    transparent-color: 0xFF00FF   # magenta = transparent
+
+    images:
+      # Backgrounds
+      - name: spr_menu_bg
+        path: assets/images/menubackground.png
+
+      - name: spr_office
+        path: assets/images/original.png
+        # The office panorama is wider than the screen.
+        # Resize to ~480x240 before converting so the pan works.
+
+      # Camera feeds (resize each to 320x240)
+      - name: spr_cam1
+        path: assets/images/Cam1.png
+      - name: spr_cam2
+        path: assets/images/Cam2.png
+      - name: spr_cam3
+        path: assets/images/Cam3.png
+      - name: spr_cam4
+        path: assets/images/Cam4.png
+      - name: spr_cam5
+        path: assets/images/Cam5.png
+      - name: spr_cam6
+        path: assets/images/Cam6.png
+      - name: spr_cam7
+        path: assets/images/Cam7.png
+      - name: spr_cam8
+        path: assets/images/Cam8.png
+      - name: spr_cam9
+        path: assets/images/Cam9.png
+      - name: spr_cam10
+        path: assets/images/Cam10.png
+      - name: spr_cam11
+        path: assets/images/Cam11.png
+
+      # Enemy sprites
+      - name: spr_jumpscare_ep
+        path: assets/images/jump.png
+      - name: spr_jumpscare_trump
+        path: assets/images/jumptrump.png
+      - name: spr_jumpscare_hawking
+        path: assets/images/scaryhawking.png
+      - name: spr_golden_stephen
+        path: assets/images/goldenstephen.png
+      - name: spr_missile
+        path: assets/images/front.png
+      - name: spr_explosion
+        path: assets/images/exp2.png   # 4-frame horizontal spritesheet
+
+      # Warning icons
+      - name: spr_warn_yellow
+        path: assets/images/Warninglight.png
+      - name: spr_warn_red
+        path: assets/images/Warningheavy.png
+
+      # Scary face flicker (main menu)
+      - name: spr_scary_hawk
+        path: assets/images/scaryhawk.png
+      - name: spr_scary_ep
+        path: assets/images/scaryep.png
+      - name: spr_scary_trump
+        path: assets/images/scarytrump.png

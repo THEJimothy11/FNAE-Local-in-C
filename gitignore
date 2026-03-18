@@ -1,0 +1,10 @@
+# CE toolchain build output
+bin/
+obj/
+
+# convimg generated sprites (regenerated from source images)
+assets/sprites/
+
+# OS junk
+.DS_Store
+Thumbs.db
