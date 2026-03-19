@@ -5,10 +5,11 @@
 extern "C" {
 #endif
 
-#define front_width 320
-#define front_height 213
-#define front_size 68160
-extern unsigned char front_data[68160];
+#define front_width 240
+#define front_height 240
+#define front_size 57602
+#define front ((gfx_sprite_t*)front_data)
+extern unsigned char front_data[57602];
 
 #ifdef __cplusplus
 }

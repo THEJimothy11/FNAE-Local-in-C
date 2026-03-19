@@ -5,10 +5,11 @@
 extern "C" {
 #endif
 
-#define scarytrump_width 320
-#define scarytrump_height 180
-#define scarytrump_size 57600
-extern unsigned char scarytrump_data[57600];
+#define scarytrump_width 240
+#define scarytrump_height 240
+#define scarytrump_size 57602
+#define scarytrump ((gfx_sprite_t*)scarytrump_data)
+extern unsigned char scarytrump_data[57602];
 
 #ifdef __cplusplus
 }

@@ -18,7 +18,7 @@ extern "C" {
 #include "Cam9.h"
 #include "Cam10.h"
 #include "Cam11.h"
-#include "FNAE-Map-layout.h"
+#include "map_layout.h"
 #include "Warningheavy.h"
 #include "Warninglight.h"
 #include "cutscene.h"

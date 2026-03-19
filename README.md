@@ -44,7 +44,7 @@ FNAE-CE/                          ← repo root
     │   ├── front.png
     │   ├── exp2.png
     │   ├── menubackground.png
-    │   ├── FNAE-Map-layout.png
+    │   ├── map_layout.png
     │   ├── Warninglight.png
     │   ├── Warningheavy.png
     │   ├── scaryhawk.png

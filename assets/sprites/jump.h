@@ -5,10 +5,11 @@
 extern "C" {
 #endif
 
-#define jump_width 320
-#define jump_height 225
-#define jump_size 72000
-extern unsigned char jump_data[72000];
+#define jump_width 240
+#define jump_height 240
+#define jump_size 57602
+#define jump ((gfx_sprite_t*)jump_data)
+extern unsigned char jump_data[57602];
 
 #ifdef __cplusplus
 }

@@ -37,41 +37,36 @@
  *       images:
  *         - assets/images/original.png
  * ========================================================= */
-extern gfx_sprite_t *spr_office;
-extern gfx_sprite_t *spr_menu_bg;
-extern gfx_sprite_t *spr_jumpscare_ep;
-extern gfx_sprite_t *spr_jumpscare_trump;
-extern gfx_sprite_t *spr_jumpscare_hawking;
-extern gfx_sprite_t *spr_golden_stephen;
-extern gfx_sprite_t *spr_warn_yellow;
-extern gfx_sprite_t *spr_warn_red;
-extern gfx_sprite_t *spr_missile;
-extern gfx_sprite_t *spr_explosion;   /* 4-frame spritesheet */
+#include "gfx.h"  /* convimg-generated: pulls in all per-sprite headers */
+
+#define OFFICE_W 255   /* original.png is 255px wide */
+
+/* convimg defines macros like:  #define trump ((gfx_sprite_t*)trump_data)
+ * This collides with struct member names like gs->custom_ai.trump.
+ * Undefine all colliding names immediately after the include.         */
+#undef trump
+#undef exp2   /* exp2 is also a standard math.h function — must undefine */
+
+/* Descriptive aliases → convimg-generated names */
+#define spr_office              ((gfx_sprite_t*)original_data)
+#define spr_menu_bg             ((gfx_sprite_t*)menubackground_data)
+#define spr_jumpscare_ep        ((gfx_sprite_t*)jump_data)
+#define spr_jumpscare_trump     ((gfx_sprite_t*)jumptrump_data)
+#define spr_jumpscare_hawking   ((gfx_sprite_t*)scaryhawking_data)
+#define spr_golden_stephen      ((gfx_sprite_t*)goldenstephen_data)
+#define spr_warn_yellow         ((gfx_sprite_t*)Warninglight_data)
+#define spr_warn_red            ((gfx_sprite_t*)Warningheavy_data)
+#define spr_missile             ((gfx_sprite_t*)star_data)
+#define spr_explosion           ((gfx_sprite_t*)exp2_data)
 
 /* Sprite ID → pointer lookup (matches SPR_* constants in enemy_ai.h) */
-static gfx_sprite_t *sprite_table[] = {
-    /* 0 */ NULL,                 /* office — loaded dynamically */
-    /* 1 */ NULL,                 /* trump jumpscare             */
-    /* 2 */ NULL,                 /* hawking jumpscare           */
-    /* 3 */ NULL,                 /* missile                     */
-    /* 4 */ NULL,                 /* warn yellow                 */
-    /* 5 */ NULL,                 /* warn red                    */
-};
+static gfx_sprite_t *sprite_table[6];
 
 /* =========================================================
  * COLOUR PALETTE
  * 16-colour subset used by the game UI.
  * Full palette loaded by convimg for sprite rendering.
  * ========================================================= */
-static const uint16_t GAME_PALETTE[] = {
-    /* 0  COL_BLACK     */ 0x0000,
-    /* 1  COL_WHITE     */ 0xFFFF,
-    /* 2  COL_GREEN     */ 0x07E0,   /* R=0 G=63 B=0  (RGB565) */
-    /* 3  COL_RED       */ 0xF800,
-    /* 4  COL_DARK_GREY */ 0x2104,
-    /* 5  COL_YELLOW    */ 0xFFE0,
-    /* 6  COL_DIM_WHITE */ 0xAD55,
-};
 
 /* =========================================================
  * LAYOUT CONSTANTS (pixels on 320×240)
@@ -102,7 +97,7 @@ void ui_manager_init(UIManager *ui, struct Game *game) {
     ui->cp_selected    = CP_ITEM_VENTS;
     ui->view_position  = 25;
 
-    /* Wire up sprite table after convimg symbols are linked */
+    /* Wire up sprite table */
     sprite_table[0] = spr_office;
     sprite_table[1] = spr_jumpscare_trump;
     sprite_table[2] = spr_jumpscare_hawking;
@@ -325,7 +320,7 @@ void ui_manager_draw_night_intro(UIManager *ui, uint8_t night,
 void ui_manager_draw_tutorial(UIManager *ui, int type) {
     gfx_FillScreen(COL_BLACK);
     gfx_SetColor(COL_GREEN);
-    gfx_DrawRectangle(4, 4, LCD_W - 8, LCD_H - 8);
+    gfx_Rectangle(4, 4, LCD_W - 8, LCD_H - 8);
 
     /* Title */
     gfx_SetTextFGColor(COL_GREEN);
@@ -402,12 +397,13 @@ void ui_manager_draw_game(UIManager *ui, int8_t view_pos) {
     /* JS: offset = -viewPosition * 50% of image width
      * C:  offset = -(view_pos * OFFICE_EXTRA) / 100
      *     where OFFICE_EXTRA = sprite_width - LCD_W            */
-    if (spr_office) {
-        int16_t extra  = (int16_t)spr_office->width - LCD_W;
-        int16_t off_x  = -(int16_t)(((int32_t)view_pos * extra) / 100);
-        gfx_Sprite(spr_office, off_x, 0);
-    } else {
-        gfx_FillScreen(COL_DARK_GREY);
+    /* --- Office background pan ---
+     * original.png is 360px wide, screen is 240px.
+     * view_pos 0-100 maps to offset 0 to -120px.        */
+    {
+        int16_t extra = OFFICE_W - LCD_W;   /* 120 */
+        int16_t off_x = -(int16_t)(((int32_t)view_pos * extra) / 100);
+        gfx_Sprite_NoClip(spr_office, off_x, 0);
     }
 
     /* --- HUD --- */
@@ -500,7 +496,7 @@ void ui_manager_draw_control_panel(UIManager *ui) {
     gfx_SetColor(COL_BLACK);
     gfx_FillRectangle(CP_X, CP_Y, CP_W, CP_H);
     gfx_SetColor(COL_GREEN);
-    gfx_DrawRectangle(CP_X, CP_Y, CP_W, CP_H);
+    gfx_Rectangle(CP_X, CP_Y, CP_W, CP_H);
 
     /* Title */
     gfx_SetTextFGColor(COL_GREEN);

@@ -22,8 +22,8 @@ sprites/Cam10.h
 sprites/Cam10.c
 sprites/Cam11.h
 sprites/Cam11.c
-sprites/FNAE-Map-layout.h
-sprites/FNAE-Map-layout.c
+sprites/map_layout.h
+sprites/map_layout.c
 sprites/Warningheavy.h
 sprites/Warningheavy.c
 sprites/Warninglight.h

@@ -5,10 +5,11 @@
 extern "C" {
 #endif
 
-#define scaryhawk_width 320
-#define scaryhawk_height 180
-#define scaryhawk_size 57600
-extern unsigned char scaryhawk_data[57600];
+#define scaryhawk_width 240
+#define scaryhawk_height 240
+#define scaryhawk_size 57602
+#define scaryhawk ((gfx_sprite_t*)scaryhawk_data)
+extern unsigned char scaryhawk_data[57602];
 
 #ifdef __cplusplus
 }

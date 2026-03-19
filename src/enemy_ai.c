@@ -23,6 +23,18 @@
 #include "camera_system.h"
 #include "ui_manager.h"
 
+/* CE screen dimensions (replaces gfx_lcdWidth / gfx_lcdHeight
+ * which do not exist as symbols in the CE toolchain)           */
+#define LCD_W  320
+#define LCD_H  240
+
+/* Use palette index 0 (black) instead of gfx_black macro which
+ * triggers a -Wpalette warning and is not palette-safe          */
+#define BLACK_IDX  0
+
+/* Forward declaration — defined later in this file             */
+void enemy_ai_trigger_jumpscare_enemy(EnemyAI *ai, JscareEnemy enemy);
+
 /* =========================================================
  * TIMER CONSTANTS  (32768 Hz)
  * ========================================================= */
@@ -876,9 +888,8 @@ void enemy_ai_draw_jumpscare(EnemyAI *ai) {
 
     /* --- Standard EP / Trump jumpscare --- */
     if (ai->jscare_phase != JSCARE_NONE) {
-        /* Determine scale: frame1=25%, frame2=50%, frame3+=100% of screen */
-        uint16_t sw = gfx_lcdWidth;
-        uint16_t sh = gfx_lcdHeight;
+        uint16_t sw = LCD_W;
+        uint16_t sh = LCD_H;
         uint16_t w, h;
 
         switch (ai->jscare_phase) {
@@ -890,10 +901,8 @@ void enemy_ai_draw_jumpscare(EnemyAI *ai) {
         int spr_id = (ai->jscare_enemy == JSCARE_ENEMY_TRUMP)
                      ? SPR_JUMPSCARE_TRUMP : SPR_JUMPSCARE_EP;
 
-        /* Black background */
-        gfx_FillScreen(gfx_black);
+        gfx_FillScreen(BLACK_IDX);
 
-        /* Centre-draw scaled sprite */
         uint16_t x = (sw - w) / 2;
         uint16_t y = (sh - h) / 2;
         ui_manager_draw_sprite_scaled(&ai->game->ui, spr_id, x, y, w, h);
@@ -901,28 +910,25 @@ void enemy_ai_draw_jumpscare(EnemyAI *ai) {
 
     /* --- Hawking missile jumpscare --- */
     if (ai->hawk_jscare_phase != HAWK_JS_NONE) {
-        gfx_FillScreen(gfx_black);
+        gfx_FillScreen(BLACK_IDX);
 
         switch (ai->hawk_jscare_phase) {
             case HAWK_JS_MISSILE_FLY: {
-                /* Draw office bg + Hawking sprite + growing missile */
                 ui_manager_draw_sprite_scaled(&ai->game->ui, 0 /* office */,
-                    0, 0, gfx_lcdWidth, gfx_lcdHeight);
-                /* Missile grows from small at left to full-screen centre */
+                    0, 0, LCD_W, LCD_H);
                 uint32_t t = ai->hawk_jscare_tick_accum;
-                uint16_t mw = (uint16_t)(10 + (t * (gfx_lcdWidth - 10)) / HAWK_FLY_TICKS);
-                uint16_t mx = (gfx_lcdWidth  - mw) / 2;
-                uint16_t my = (gfx_lcdHeight - mw) / 2;
+                uint16_t mw = (uint16_t)(10 + (t * (LCD_W - 10)) / HAWK_FLY_TICKS);
+                uint16_t mx = (LCD_W - mw) / 2;
+                uint16_t my = (LCD_H - mw) / 2;
                 ui_manager_draw_sprite_scaled(&ai->game->ui, SPR_HAWKING_MISSILE,
                     mx, my, mw, mw);
                 break;
             }
             case HAWK_JS_EXPLOSION:
-                /* Draw explosion frame */
                 ui_manager_draw_explosion_frame(&ai->game->ui, ai->hawk_exp_frame);
                 break;
             default:
-                gfx_FillScreen(gfx_black);
+                gfx_FillScreen(BLACK_IDX);
                 break;
         }
     }

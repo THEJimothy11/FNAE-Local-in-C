@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <sys/timers.h>
 
 #include "game.h"
 #include "game_state.h"
@@ -70,10 +71,17 @@ static void static_noise_draw(void) {
  * for FLICKER_FRAMES frames before reverting to the normal BG.
  * ========================================================= */
 
-extern gfx_sprite_t *spr_scary_hawk;
-extern gfx_sprite_t *spr_scary_ep;
-extern gfx_sprite_t *spr_scary_trump;
-extern gfx_sprite_t *spr_menu_bg;
+#include "gfx.h"
+
+/* gfx.h defines macros like #define trump (...) which collide with
+ * struct members. Undefine any that cause problems in this file.   */
+#undef trump
+
+/* Aliases to match the descriptive names used in this file */
+#define spr_scary_hawk  ((gfx_sprite_t*)scaryhawk_data)
+#define spr_scary_ep    ((gfx_sprite_t*)scaryep_data)
+#define spr_scary_trump ((gfx_sprite_t*)scarytrump_data)
+#define spr_menu_bg     ((gfx_sprite_t*)menubackground_data)
 
 #define FLICKER_INTERVAL   10    /* check every N frames */
 #define FLICKER_CHANCE     10    /* percent (≈10% per check = ~1% per frame) */
@@ -116,8 +124,7 @@ static gfx_sprite_t *scary_face_bg(void) {
  * ========================================================= */
 int main(void) {
     /* Seed RNG from the real-time clock so it's different each run */
-    srand((unsigned int)rtc_GetSeconds() +
-          (unsigned int)rtc_GetMinutes() * 60);
+    srand(rtc_Time());
 
     /* Populate scary sprite pointers */
     scary_sprites[0] = spr_scary_hawk;

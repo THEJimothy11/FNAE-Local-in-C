@@ -1,6 +1,13 @@
 # convimg.yaml
 # Run from the assets/ folder: convimg
 # Output: sprites/gfx.c and sprites/gfx.h
+#
+# IMPORTANT before running:
+#   2. Resize all images to 240x240:
+#      magick mogrify -resize 240x240 images\*.png
+#   3. Delete old sprites folder and recreate it:
+#      rd /s /q sprites && mkdir sprites
+#   4. Run: convimg
 
 palettes:
   - name: global_palette
@@ -9,7 +16,7 @@ palettes:
 converts:
   - name: gfx
     palette: global_palette
-    width-and-height: false
+    compress: zx7
     images:
       - images/Cam1.png
       - images/Cam2.png
@@ -22,7 +29,7 @@ converts:
       - images/Cam9.png
       - images/Cam10.png
       - images/Cam11.png
-      - images/FNAE-Map-layout.png
+      - images/map_layout.png
       - images/Warningheavy.png
       - images/Warninglight.png
       - images/cutscene.png

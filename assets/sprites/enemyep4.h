@@ -7,8 +7,9 @@ extern "C" {
 
 #define enemyep4_width 240
 #define enemyep4_height 240
-#define enemyep4_size 57600
-extern unsigned char enemyep4_data[57600];
+#define enemyep4_size 57602
+#define enemyep4 ((gfx_sprite_t*)enemyep4_data)
+extern unsigned char enemyep4_data[57602];
 
 #ifdef __cplusplus
 }

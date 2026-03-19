@@ -7,8 +7,9 @@ extern "C" {
 
 #define trump3_width 240
 #define trump3_height 240
-#define trump3_size 57600
-extern unsigned char trump3_data[57600];
+#define trump3_size 57602
+#define trump3 ((gfx_sprite_t*)trump3_data)
+extern unsigned char trump3_data[57602];
 
 #ifdef __cplusplus
 }

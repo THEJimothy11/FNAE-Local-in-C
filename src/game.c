@@ -220,8 +220,6 @@ static TutorialType tut_type = TUT_NIGHT1;
  * ========================================================= */
 
 static void game_init_new(Game *g);
-static void game_start_loop(Game *g);
-static void game_update(Game *g, uint32_t dt);
 static void game_draw(Game *g);
 static void game_over(Game *g, bool win);
 static void game_win_night(Game *g);
@@ -229,15 +227,15 @@ static void game_show_tutorial(Game *g, TutorialType type);
 static void game_close_tutorial(Game *g);
 static void game_toggle_vents(Game *g);
 static void game_toggle_camera(Game *g);
-static void game_update_power(Game *g, uint32_t dt);
+static void game_continue_to_next_night(Game *g);
+static void game_show_main_menu(Game *g);
 static void game_update_time(Game *g, uint32_t dt);
+static void game_update_power(Game *g, uint32_t dt);
 static void game_update_vent_toggle(Game *g, uint32_t dt);
+static void game_update_golden(Game *g, uint32_t dt);
 static void game_update_intro(Game *g, uint32_t dt);
 static void game_update_win_anim(Game *g, uint32_t dt);
 static void game_update_gameover(Game *g, uint32_t dt);
-static void game_update_golden(Game *g, uint32_t dt);
-static void game_continue_to_next_night(Game *g);
-static void game_show_main_menu(Game *g);
 
 /* =========================================================
  * PUBLIC: game_create
@@ -519,10 +517,10 @@ static void game_win_night(Game *g) {
     /* Handle progress & unlocks */
     if (g->state.current_night == 5) {
         g->state.night6_unlocked = true;
-        save_progress(g);
+        save_progress(&g->state);
     } else if (g->state.current_night == 6) {
         g->state.night6_completed = true;
-        save_progress(g);
+        save_progress(&g->state);
     } else if (g->state.custom_night && g->state.current_night == 7) {
         bool is_202020 =
             g->state.custom_ai.epstein == 20 &&
@@ -530,7 +528,7 @@ static void game_win_night(Game *g) {
             g->state.custom_ai.hawking == 20;
         if (is_202020) {
             g->state.custom_202020 = true;
-            save_progress(g);
+            save_progress(&g->state);
         }
     }
 
@@ -590,7 +588,7 @@ static void game_over(Game *g, bool win) {
     enemy_ai_stop(&g->ai);
 
     if (!win && g->state.current_night > 1) {
-        save_progress(g);
+        save_progress(&g->state);
     }
 
     go_is_win      = win;
@@ -767,7 +765,6 @@ void game_on_show_main_menu(Game *g) {
  * VIEW ROTATION  (replaces startViewRotation / requestAnimationFrame)
  * Called every frame from game_update() when in SCREEN_GAME.
  * ========================================================= */
-
 static void game_update_view(Game *g) {
     if (g->state.camera_open || g->state.control_panel_open) return;
 
@@ -838,7 +835,7 @@ static void game_draw(Game *g) {
 
         case SCREEN_WIN_ANIM: {
             /* Black background */
-            gfx_FillScreen(gfx_black);
+            gfx_FillScreen(0);
             const char *line1 = (win_phase == WIN_SHOW_TIME) ? "5:59 AM" : "6:00 AM";
             const char *line2 = NULL;
             if (win_phase == WIN_SHOW_MSG) {

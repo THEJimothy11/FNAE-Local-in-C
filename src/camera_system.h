@@ -128,6 +128,9 @@ void camera_system_play_sound_lure(CameraSystem *cs);
 /* Reset sound button count after camera restart */
 void camera_system_reset_sound_count(CameraSystem *cs);
 
+/* Shock Hawking (1-second static flash then reset) */
+void camera_system_shock_hawking(CameraSystem *cs);
+
 /* Draw the full camera screen */
 void camera_system_draw(CameraSystem *cs);
 
