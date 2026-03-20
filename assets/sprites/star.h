@@ -5,11 +5,11 @@
 extern "C" {
 #endif
 
-#define star_width 240
-#define star_height 240
-#define star_size 57602
-#define star ((gfx_sprite_t*)star_data)
-extern unsigned char star_data[57602];
+#define star_width 32
+#define star_height 32
+#define star_size 1026
+#define star_compressed_size 90
+extern unsigned char star_compressed[90];
 
 #ifdef __cplusplus
 }

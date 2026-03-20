@@ -89,6 +89,7 @@ void ui_manager_update_camera_status(UIManager *ui);
 /* -------------------------------------------------------
  * Screen draw dispatchers
  * ------------------------------------------------------- */
+void ui_manager_draw_cutscene(UIManager *ui);
 void ui_manager_draw_main_menu(UIManager *ui);
 void ui_manager_draw_custom_night_menu(UIManager *ui);
 void ui_manager_draw_night_intro(UIManager *ui, uint8_t night,

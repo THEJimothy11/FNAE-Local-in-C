@@ -5,11 +5,11 @@
 extern "C" {
 #endif
 
-#define Cam11_width 240
-#define Cam11_height 240
-#define Cam11_size 57602
-#define Cam11 ((gfx_sprite_t*)Cam11_data)
-extern unsigned char Cam11_data[57602];
+#define Cam11_width 160
+#define Cam11_height 120
+#define Cam11_size 19202
+#define Cam11_compressed_size 8413
+extern unsigned char Cam11_compressed[8413];
 
 #ifdef __cplusplus
 }

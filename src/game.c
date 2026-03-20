@@ -28,6 +28,7 @@
 #include "camera_system.h"
 #include "ui_manager.h"
 #include "input_handler.h"
+#include "../assets/sprites/global_palette.h"
 
 /* =========================================================
  * SAVE / LOAD  (replaces localStorage)
@@ -192,6 +193,7 @@ static uint32_t golden_tick_accum  = 0;
 
 typedef enum {
     SCREEN_MAIN_MENU = 0,
+    SCREEN_CUTSCENE,
     SCREEN_TUTORIAL,
     SCREEN_NIGHT_INTRO,
     SCREEN_GAME,
@@ -270,6 +272,7 @@ Game *game_create(void) {
 void game_run(Game *g) {
     gfx_Begin();
     gfx_SetDrawBuffer();
+    gfx_SetPalette(global_palette, sizeof_global_palette, 0);
 
     current_screen = SCREEN_MAIN_MENU;
 
@@ -282,6 +285,13 @@ void game_run(Game *g) {
         kb_Scan();
         if (current_screen == SCREEN_MAIN_MENU && kb_IsDown(kb_KeyClear)) {
             break;   /* quit */
+        }
+        /* Any key dismisses cutscene and starts the game */
+        if (current_screen == SCREEN_CUTSCENE) {
+            kb_Scan();
+            if (kb_AnyKey()) {
+                game_init_new(g);
+            }
         }
         input_handler_update(&g->input, dt);
 
@@ -366,7 +376,7 @@ void game_start_new(Game *g) {
     g->state.current_night = 1;
     g->state.custom_night  = false;
     clear_progress();
-    game_init_new(g);
+    current_screen = SCREEN_CUTSCENE;
 }
 
 void game_continue(Game *g) {
@@ -762,25 +772,6 @@ void game_on_show_main_menu(Game *g) {
 }
 
 /* =========================================================
- * VIEW ROTATION  (replaces startViewRotation / requestAnimationFrame)
- * Called every frame from game_update() when in SCREEN_GAME.
- * ========================================================= */
-static void game_update_view(Game *g) {
-    if (g->state.camera_open || g->state.control_panel_open) return;
-
-    if (g->is_rotating_left && g->view_position > 0) {
-        g->view_position -= g->rotation_speed;
-        if (g->view_position < 0) g->view_position = 0;
-        ui_manager_update_view_position(&g->ui, g->view_position);
-    }
-    if (g->is_rotating_right && g->view_position < 100) {
-        g->view_position += g->rotation_speed;
-        if (g->view_position > 100) g->view_position = 100;
-        ui_manager_update_view_position(&g->ui, g->view_position);
-    }
-}
-
-/* =========================================================
  * DRAW  (dispatches to ui_manager / camera_system)
  * ========================================================= */
 
@@ -789,6 +780,10 @@ static void game_draw(Game *g) {
 
         case SCREEN_MAIN_MENU:
             ui_manager_draw_main_menu(&g->ui);
+            break;
+
+        case SCREEN_CUTSCENE:
+            ui_manager_draw_cutscene(&g->ui);
             break;
 
         case SCREEN_CUSTOM_NIGHT_MENU:
@@ -864,23 +859,19 @@ static void game_draw(Game *g) {
     }
 }
 
-/* Update dispatcher (view rotation lives here) */
-static void game_update(Game *g, uint32_t dt) {
-    if (current_screen == SCREEN_GAME && g->state.is_game_running) {
-        game_update_view(g);
-    }
-    (void)dt;
-}
+/* game_update removed — game_update_view called directly from game_run */
 
 /* =========================================================
  * PUBLIC ACCESSORS used by other modules
  * ========================================================= */
 
 bool game_is_screen(Game *g, int screen) {
+    (void)g;
     return current_screen == (ScreenState)screen;
 }
 
 int game_get_screen(Game *g) {
+    (void)g;
     return (int)current_screen;
 }
 

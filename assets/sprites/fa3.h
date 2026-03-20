@@ -5,11 +5,11 @@
 extern "C" {
 #endif
 
-#define fa3_width 240
-#define fa3_height 240
-#define fa3_size 57602
-#define fa3 ((gfx_sprite_t*)fa3_data)
-extern unsigned char fa3_data[57602];
+#define fa3_width 80
+#define fa3_height 80
+#define fa3_size 6402
+#define fa3_compressed_size 293
+extern unsigned char fa3_compressed[293];
 
 #ifdef __cplusplus
 }

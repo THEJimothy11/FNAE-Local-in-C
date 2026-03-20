@@ -5,11 +5,11 @@
 extern "C" {
 #endif
 
-#define exp2_width 240
-#define exp2_height 240
-#define exp2_size 57602
-#define exp2 ((gfx_sprite_t*)exp2_data)
-extern unsigned char exp2_data[57602];
+#define exp2_width 160
+#define exp2_height 40
+#define exp2_size 6402
+#define exp2_compressed_size 992
+extern unsigned char exp2_compressed[992];
 
 #ifdef __cplusplus
 }

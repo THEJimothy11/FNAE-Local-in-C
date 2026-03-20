@@ -5,11 +5,11 @@
 extern "C" {
 #endif
 
-#define Warninglight_width 240
-#define Warninglight_height 240
-#define Warninglight_size 57602
-#define Warninglight ((gfx_sprite_t*)Warninglight_data)
-extern unsigned char Warninglight_data[57602];
+#define Warninglight_width 32
+#define Warninglight_height 32
+#define Warninglight_size 1026
+#define Warninglight_compressed_size 210
+extern unsigned char Warninglight_compressed[210];
 
 #ifdef __cplusplus
 }

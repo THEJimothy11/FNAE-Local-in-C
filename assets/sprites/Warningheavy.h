@@ -5,11 +5,11 @@
 extern "C" {
 #endif
 
-#define Warningheavy_width 240
-#define Warningheavy_height 240
-#define Warningheavy_size 57602
-#define Warningheavy ((gfx_sprite_t*)Warningheavy_data)
-extern unsigned char Warningheavy_data[57602];
+#define Warningheavy_width 32
+#define Warningheavy_height 32
+#define Warningheavy_size 1026
+#define Warningheavy_compressed_size 213
+extern unsigned char Warningheavy_compressed[213];
 
 #ifdef __cplusplus
 }

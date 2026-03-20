@@ -2,91 +2,82 @@
  * ui_manager.c
  * Five Nights at Epstein - TI-84 CE Port
  * Ported from UIManager.js
- *
- * Every DOM/CSS operation is replaced with gfx_ calls.
- * Mouse hover effects → removed (no mouse on TI-84 CE).
- * Tooltip → removed.
- * Animated CSS dots → DotsAnim tick accumulator.
- * HTML control panel popup → drawn directly on-screen.
- * Volume sliders → removed (no audio).
- *
- * Font note: the CE toolchain ships with a built-in 8x8 font.
- * Large text is drawn with gfx_SetTextScale(). For the game's
- * "monospace green terminal" look we use gfx_SetTextFGColor(COL_GREEN).
  */
 
 #include <string.h>
 #include <stdio.h>
 #include <graphx.h>
+#include <compression.h>
 
 #include "ui_manager.h"
 #include "game.h"
 #include "game_state.h"
 #include "enemy_ai.h"
 #include "camera_system.h"
+#include "sprites.h"
+#include "decomp_buf.h"
+
+#define OFFICE_W 255
 
 /* =========================================================
- * SPRITE INDEX DECLARATIONS
- * Replace these externs with your actual convimg output.
- * convimg.yaml should produce gfx_sprite_t* for each asset.
+ * DECOMPRESSION
+ * All sprites decompress into the two shared global buffers.
  *
- * Example convimg.yaml entry:
- *   converts:
- *     - name: spr_office
- *       palette: global
- *       images:
- *         - assets/images/original.png
+ * buf_a (decomp_buf_a) — "background" slot:
+ *   office, menu_bg (these are drawn alone, never with each other)
+ *
+ * buf_b (decomp_buf_b) — "foreground/scratch" slot:
+ *   warnings, overlays, golden stephen, explosion, sprite_scaled
+ *
+ * Sprites that access ->width / ->height are decompressed fresh
+ * each call — they're rare enough that the cost is acceptable.
+ *
+ * WARNING: never hold a pointer from spr_*() across another
+ * spr_*() call that uses the same buffer.
  * ========================================================= */
-#include "gfx.h"  /* convimg-generated: pulls in all per-sprite headers */
 
-#define OFFICE_W 255   /* original.png is 255px wide */
+static gfx_sprite_t *spr_office(void) {
+    zx0_Decompress(decomp_buf_a, original_compressed);
+    return (gfx_sprite_t *)decomp_buf_a;
+}
+static gfx_sprite_t *spr_menu_bg(void) {
+    zx0_Decompress(decomp_buf_a, menubackground_compressed);
+    return (gfx_sprite_t *)decomp_buf_a;
+}
+static gfx_sprite_t *spr_explosion(void) {
+    zx0_Decompress(decomp_buf_b, exp2_compressed);
+    return (gfx_sprite_t *)decomp_buf_b;
+}
+/* goldenstephen sprite removed — replaced with text overlay */
+static gfx_sprite_t *spr_warn_yellow(void) {
+    zx0_Decompress(decomp_buf_b, Warninglight_compressed);
+    return (gfx_sprite_t *)decomp_buf_b;
+}
+static gfx_sprite_t *spr_warn_red(void) {
+    zx0_Decompress(decomp_buf_b, Warningheavy_compressed);
+    return (gfx_sprite_t *)decomp_buf_b;
+}
+static gfx_sprite_t *scratch_decompress(const void *compressed) {
+    zx0_Decompress(decomp_buf_b, compressed);
+    return (gfx_sprite_t *)decomp_buf_b;
+}
 
-/* convimg defines macros like:  #define trump ((gfx_sprite_t*)trump_data)
- * This collides with struct member names like gs->custom_ai.trump.
- * Undefine all colliding names immediately after the include.         */
-#undef trump
-#undef exp2   /* exp2 is also a standard math.h function — must undefine */
-
-/* Descriptive aliases → convimg-generated names */
-#define spr_office              ((gfx_sprite_t*)original_data)
-#define spr_menu_bg             ((gfx_sprite_t*)menubackground_data)
-#define spr_jumpscare_ep        ((gfx_sprite_t*)jump_data)
-#define spr_jumpscare_trump     ((gfx_sprite_t*)jumptrump_data)
-#define spr_jumpscare_hawking   ((gfx_sprite_t*)scaryhawking_data)
-#define spr_golden_stephen      ((gfx_sprite_t*)goldenstephen_data)
-#define spr_warn_yellow         ((gfx_sprite_t*)Warninglight_data)
-#define spr_warn_red            ((gfx_sprite_t*)Warningheavy_data)
-#define spr_missile             ((gfx_sprite_t*)star_data)
-#define spr_explosion           ((gfx_sprite_t*)exp2_data)
-
-/* Sprite ID → pointer lookup (matches SPR_* constants in enemy_ai.h) */
-static gfx_sprite_t *sprite_table[6];
+/* Sprite table for ui_manager_draw_sprite_scaled.
+ * Stored as compressed pointers; decompressed into scratch on use. */
+static const void *sprite_table_compressed[6];
 
 /* =========================================================
- * COLOUR PALETTE
- * 16-colour subset used by the game UI.
- * Full palette loaded by convimg for sprite rendering.
+ * LAYOUT CONSTANTS
  * ========================================================= */
-
-/* =========================================================
- * LAYOUT CONSTANTS (pixels on 320×240)
- * Derived from the JS percentage-based layout.
- * ========================================================= */
-
-/* HUD bar at the bottom */
 #define HUD_Y        (LCD_H - 18)
 #define HUD_H        18
-
-/* Control panel popup */
 #define CP_X         20
 #define CP_Y         20
 #define CP_W         (LCD_W - 40)
 #define CP_H         (LCD_H - 40)
 #define CP_ROW_H     28
-
-/* Hotspot thresholds (view_position 0-100) */
-#define HS_VENTS_THRESH   15   /* show vent button when pos < 15  */
-#define HS_CAM_THRESH     85   /* show camera btn when pos > 85   */
+#define HS_VENTS_THRESH   15
+#define HS_CAM_THRESH     85
 
 /* =========================================================
  * INIT
@@ -97,17 +88,17 @@ void ui_manager_init(UIManager *ui, struct Game *game) {
     ui->cp_selected    = CP_ITEM_VENTS;
     ui->view_position  = 25;
 
-    /* Wire up sprite table */
-    sprite_table[0] = spr_office;
-    sprite_table[1] = spr_jumpscare_trump;
-    sprite_table[2] = spr_jumpscare_hawking;
-    sprite_table[3] = spr_missile;
-    sprite_table[4] = spr_warn_yellow;
-    sprite_table[5] = spr_warn_red;
+    /* Wire up compressed sprite table */
+    sprite_table_compressed[0] = original_compressed;
+    sprite_table_compressed[1] = trump5_compressed;  /* jumptrump dropped; trump5 drawn scaled 2x */
+    sprite_table_compressed[2] = scaryhawking_compressed;
+    sprite_table_compressed[3] = star_compressed;
+    sprite_table_compressed[4] = Warninglight_compressed;
+    sprite_table_compressed[5] = Warningheavy_compressed;
 }
 
 /* =========================================================
- * DOTS ANIMATION TICK  (replaces animateLoadingDots setTimeout)
+ * DOTS ANIMATION TICK
  * ========================================================= */
 void ui_manager_tick_dots(UIManager *ui, uint32_t dt) {
     if (ui->vents_dots.running) {
@@ -127,10 +118,9 @@ void ui_manager_tick_dots(UIManager *ui, uint32_t dt) {
 }
 
 /* =========================================================
- * UPDATE  (replaces UIManager.update())
+ * UPDATE
  * ========================================================= */
 void ui_manager_update(UIManager *ui) {
-    /* Start/stop dots animations based on game state */
     ui->vents_dots.running = ui->game->state.vents_toggling;
     ui->cam_dots.running   = ui->game->state.camera_restarting;
 
@@ -144,20 +134,15 @@ void ui_manager_update(UIManager *ui) {
     }
 }
 
-void ui_manager_update_vents_status(UIManager *ui) {
-    ui_manager_update(ui);
-}
-
-void ui_manager_update_camera_status(UIManager *ui) {
-    ui_manager_update(ui);
-}
+void ui_manager_update_vents_status(UIManager *ui)  { ui_manager_update(ui); }
+void ui_manager_update_camera_status(UIManager *ui) { ui_manager_update(ui); }
 
 void ui_manager_update_view_position(UIManager *ui, int8_t pos) {
     ui->view_position = pos;
 }
 
 /* =========================================================
- * HELPER: draw text centred horizontally
+ * HELPERS
  * ========================================================= */
 static void draw_centred_text(const char *str, uint16_t y, uint8_t scale) {
     gfx_SetTextScale(scale, scale);
@@ -167,35 +152,24 @@ static void draw_centred_text(const char *str, uint16_t y, uint8_t scale) {
     gfx_PrintString(str);
 }
 
-/* =========================================================
- * HELPER: draw dots string from DotsAnim frame
- * ========================================================= */
 static const char *dots_str(uint8_t frame) {
     static const char *DOTS[3] = { ".", "..", "..." };
     return DOTS[frame % 3];
 }
 
 /* =========================================================
- * MAIN MENU  (replaces the HTML #main-menu screen)
- *
- * Layout (approximate):
- *   Title "FIVE NIGHTS AT EPSTEIN" at top
- *   Menu items: NEW GAME / CONTINUE / SPECIAL NIGHT / CUSTOM NIGHT
- *   Selected item highlighted with >
+ * MAIN MENU
  * ========================================================= */
 void ui_manager_draw_main_menu(UIManager *ui) {
-    /* Background */
-    if (spr_menu_bg) {
-        gfx_Sprite_NoClip(spr_menu_bg, 0, 0);
-    } else {
+    gfx_sprite_t *bg = spr_menu_bg();
+    if (bg)
+        gfx_Sprite_NoClip(bg, 0, 0);
+    else
         gfx_FillScreen(COL_BLACK);
-    }
 
-    /* Title */
     gfx_SetTextFGColor(COL_WHITE);
     draw_centred_text("FIVE NIGHTS AT EPSTEIN", 10, 2);
 
-    /* Determine available menu items */
     GameState *gs = &ui->game->state;
     bool can_continue = gs->current_night > 1;
     bool n6_unlocked  = gs->night6_unlocked;
@@ -211,45 +185,32 @@ void ui_manager_draw_main_menu(UIManager *ui) {
     for (uint8_t i = 0; i < n_items; i++) {
         gfx_SetTextFGColor(COL_WHITE);
         gfx_SetTextScale(2, 2);
-        uint16_t y = start_y + i * 30;
-
-        /* Cursor indicator */
-        /* (No cursor on main menu — player uses [Up]/[Down] + [Enter]) */
-        /* We draw a static list; input_handler tracks selected index */
-        gfx_SetTextXY(40, y);
+        gfx_SetTextXY(40, start_y + i * 30);
         gfx_PrintString(items[i]);
     }
 
-    /* Stars for completions (replaces star icons) */
     uint16_t star_x = LCD_W - 20;
     gfx_SetTextFGColor(COL_YELLOW);
     gfx_SetTextScale(1, 1);
-    if (n6_unlocked)         { gfx_SetTextXY(star_x, 10); gfx_PrintChar('*'); star_x -= 12; }
-    if (gs->night6_completed){ gfx_SetTextXY(star_x, 10); gfx_PrintChar('*'); star_x -= 12; }
-    if (gs->custom_202020)   { gfx_SetTextXY(star_x, 10); gfx_PrintChar('*'); }
+    if (n6_unlocked)          { gfx_SetTextXY(star_x, 10); gfx_PrintChar('*'); star_x -= 12; }
+    if (gs->night6_completed) { gfx_SetTextXY(star_x, 10); gfx_PrintChar('*'); star_x -= 12; }
+    if (gs->custom_202020)    { gfx_SetTextXY(star_x, 10); gfx_PrintChar('*'); }
 
-    /* Controls hint at bottom */
     gfx_SetTextFGColor(COL_DIM_WHITE);
     gfx_SetTextScale(1, 1);
     draw_centred_text("[ENTER] Select  [CLEAR] Quit", LCD_H - 12, 1);
 }
 
 /* =========================================================
- * CUSTOM NIGHT MENU  (replaces #custom-night-menu)
- *
- * Shows three sliders for Epstein / Trump / Hawking AI levels.
- * On CE there are no sliders — we use [Left]/[Right] to adjust
- * the selected AI, [Up]/[Down] to choose which AI to adjust.
+ * CUSTOM NIGHT MENU
  * ========================================================= */
 void ui_manager_draw_custom_night_menu(UIManager *ui) {
     gfx_FillScreen(COL_BLACK);
-
     gfx_SetTextFGColor(COL_GREEN);
     draw_centred_text("CUSTOM NIGHT", 8, 2);
 
     GameState *gs = &ui->game->state;
-
-    const char *names[3] = { "EPSTEIN", "TRUMP", "HAWKING" };
+    const char *names[3]  = { "EPSTEIN", "TRUMP", "HAWKING" };
     uint8_t     levels[3] = {
         gs->custom_ai.epstein,
         gs->custom_ai.trump,
@@ -258,29 +219,24 @@ void ui_manager_draw_custom_night_menu(UIManager *ui) {
 
     for (uint8_t i = 0; i < 3; i++) {
         uint16_t y = 60 + i * 40;
-
-        /* Row label */
         gfx_SetTextFGColor(COL_WHITE);
         gfx_SetTextScale(2, 2);
         gfx_SetTextXY(20, y);
         gfx_PrintString(names[i]);
 
-        /* Level number */
         char buf[8];
         sprintf(buf, "%u", levels[i]);
         gfx_SetTextXY(200, y);
         gfx_PrintString(buf);
 
-        /* Bar (0-20 scale mapped to 80 px) */
         uint16_t bar_x = 200 + 24;
-        uint16_t bar_w = (uint16_t)(levels[i] * 4);   /* max 80 px */
+        uint16_t bar_w = (uint16_t)(levels[i] * 4);
         gfx_SetColor(COL_GREEN);
         gfx_FillRectangle(bar_x, y + 2, bar_w, 12);
         gfx_SetColor(COL_DARK_GREY);
         gfx_FillRectangle(bar_x + bar_w, y + 2, 80 - bar_w, 12);
     }
 
-    /* Controls hint */
     gfx_SetTextFGColor(COL_DIM_WHITE);
     gfx_SetTextScale(1, 1);
     draw_centred_text("[UP/DOWN] Select  [LEFT/RIGHT] Adjust  [ENTER] Start  [DEL] Back",
@@ -288,41 +244,33 @@ void ui_manager_draw_custom_night_menu(UIManager *ui) {
 }
 
 /* =========================================================
- * NIGHT INTRO  (replaces showNightIntro() DOM animation)
- * alpha 0-255 for fade in/out
+ * NIGHT INTRO
  * ========================================================= */
 void ui_manager_draw_night_intro(UIManager *ui, uint8_t night,
                                   bool custom, uint8_t alpha) {
     gfx_FillScreen(COL_BLACK);
-
     char buf[24];
-    if (custom && night == 7) {
+    if (custom && night == 7)
         strcpy(buf, "CUSTOM NIGHT");
-    } else {
+    else
         sprintf(buf, "NIGHT %u", night);
-    }
 
-    /* Fake alpha by choosing colour brightness based on alpha */
-    /* CE has no native alpha blend; we simulate with palette index */
     uint8_t col = (alpha > 192) ? COL_WHITE :
                   (alpha > 128) ? COL_DIM_WHITE : COL_DARK_GREY;
     gfx_SetTextFGColor(col);
     gfx_SetTextScale(4, 4);
     draw_centred_text(buf, LCD_H / 2 - 16, 4);
-
     (void)ui;
 }
 
 /* =========================================================
- * TUTORIAL  (replaces showTutorial() DOM overlay)
- * type: 0=night1, 1=night2, 2=night3
+ * TUTORIAL
  * ========================================================= */
 void ui_manager_draw_tutorial(UIManager *ui, int type) {
     gfx_FillScreen(COL_BLACK);
     gfx_SetColor(COL_GREEN);
     gfx_Rectangle(4, 4, LCD_W - 8, LCD_H - 8);
 
-    /* Title */
     gfx_SetTextFGColor(COL_GREEN);
     gfx_SetTextScale(2, 2);
     const char *title = "";
@@ -333,11 +281,9 @@ void ui_manager_draw_tutorial(UIManager *ui, int type) {
     }
     draw_centred_text(title, 12, 2);
 
-    /* Body text — split into fixed short lines for the small screen */
     gfx_SetTextFGColor(COL_WHITE);
     gfx_SetTextScale(1, 1);
 
-    /* Line arrays per tutorial type (max ~38 chars per line at scale 1) */
     static const char *LINES_N1[] = {
         "EPSTEIN STARTS AT CAM 11.",
         "USE AUDIO LURE TO KEEP HIM FAR.",
@@ -366,7 +312,6 @@ void ui_manager_draw_tutorial(UIManager *ui, int type) {
 
     const char **lines = (type == 0) ? LINES_N1 :
                          (type == 1) ? LINES_N2 : LINES_N3;
-
     uint16_t y = 48;
     for (int i = 0; lines[i] != NULL; i++) {
         gfx_SetTextXY(10, y);
@@ -374,62 +319,37 @@ void ui_manager_draw_tutorial(UIManager *ui, int type) {
         y += 14;
     }
 
-    /* Dismiss prompt */
     gfx_SetTextFGColor(COL_GREEN);
     draw_centred_text("[2nd] / [ENTER] = GOT IT", LCD_H - 14, 1);
-
     (void)ui;
 }
 
 /* =========================================================
- * GAME SCREEN  (replaces the office view + HUD)
- *
- * view_pos 0-100:
- *   0  = far left  (control panel side)
- *   50 = centre
- *   100 = far right (camera button side)
- *
- * The office panorama sprite is 480px wide (1.5× the screen).
- * We pan it by offsetting the blit X.
+ * GAME SCREEN
  * ========================================================= */
 void ui_manager_draw_game(UIManager *ui, int8_t view_pos) {
-    /* --- Office background pan --- */
-    /* JS: offset = -viewPosition * 50% of image width
-     * C:  offset = -(view_pos * OFFICE_EXTRA) / 100
-     *     where OFFICE_EXTRA = sprite_width - LCD_W            */
-    /* --- Office background pan ---
-     * original.png is 360px wide, screen is 240px.
-     * view_pos 0-100 maps to offset 0 to -120px.        */
     {
-        int16_t extra = OFFICE_W - LCD_W;   /* 120 */
+        int16_t extra = OFFICE_W - LCD_W;
         int16_t off_x = -(int16_t)(((int32_t)view_pos * extra) / 100);
-        gfx_Sprite_NoClip(spr_office, off_x, 0);
+        gfx_Sprite_NoClip(spr_office(), off_x, 0);
     }
 
-    /* --- HUD --- */
     ui_manager_draw_hud(ui);
 
-    /* --- Control panel popup (if open) --- */
-    if (ui->control_panel_open) {
+    if (ui->control_panel_open)
         ui_manager_draw_control_panel(ui);
-    }
 
-    /* --- Hawking warning indicator --- */
     uint8_t hw = enemy_ai_hawking_warning(&ui->game->ai);
-    if (hw > 0) {
+    if (hw > 0)
         ui_manager_draw_hawking_warning(ui, hw);
-    }
 
-    /* --- Hotspot labels (visible at view extremes) --- */
     gfx_SetTextScale(1, 1);
     if (view_pos < HS_VENTS_THRESH) {
-        /* Control panel hint — left side */
         gfx_SetTextFGColor(COL_WHITE);
         gfx_SetTextXY(2, HUD_Y - 14);
         gfx_PrintString("[ALPHA] Ctrl Panel");
     }
     if (view_pos > HS_CAM_THRESH) {
-        /* Camera hint — right side */
         gfx_SetTextFGColor(COL_WHITE);
         gfx_SetTextXY(LCD_W - 10*8 - 2, HUD_Y - 14);
         gfx_PrintString("[2nd] Camera");
@@ -437,22 +357,16 @@ void ui_manager_draw_game(UIManager *ui, int8_t view_pos) {
 }
 
 /* =========================================================
- * HUD  (replaces power-value / time-value / night-value elements)
- *
- * Bottom bar layout:
- *   [O2: 100%]   [12 AM]   [Night: 1]
+ * HUD
  * ========================================================= */
 void ui_manager_draw_hud(UIManager *ui) {
     GameState *gs = &ui->game->state;
 
-    /* HUD background strip */
     gfx_SetColor(COL_BLACK);
     gfx_FillRectangle(0, HUD_Y, LCD_W, HUD_H);
-
     gfx_SetTextScale(1, 1);
 
-    /* O2 gauge */
-    uint16_t o2 = (uint16_t)(gs->oxygen / 10);   /* stored *10 in C */
+    uint16_t o2   = (uint16_t)(gs->oxygen / 10);
     bool     low_o2 = (o2 <= 40 && gs->vents_closed);
     gfx_SetTextFGColor(low_o2 ? COL_RED : COL_WHITE);
     char o2_buf[12];
@@ -460,114 +374,84 @@ void ui_manager_draw_hud(UIManager *ui) {
     gfx_SetTextXY(4, HUD_Y + 5);
     gfx_PrintString(o2_buf);
 
-    /* Time */
     gfx_SetTextFGColor(COL_WHITE);
     uint8_t hour = (gs->current_time == 0) ? 12 : gs->current_time;
     char time_buf[10];
     sprintf(time_buf, "%u AM", hour);
     draw_centred_text(time_buf, HUD_Y + 5, 1);
 
-    /* Night number */
     char night_buf[14];
-    if (gs->custom_night && gs->current_night == 7) {
+    if (gs->custom_night && gs->current_night == 7)
         strcpy(night_buf, "CUSTOM");
-    } else {
+    else
         sprintf(night_buf, "Night %u", gs->current_night);
-    }
     gfx_SetTextXY(LCD_W - (uint16_t)(strlen(night_buf) * 8) - 4, HUD_Y + 5);
     gfx_PrintString(night_buf);
 }
 
 /* =========================================================
- * CONTROL PANEL POPUP  (replaces createControlPanelPopup())
- *
- * Monospace green terminal look.
- * Two options:
- *   [0] > Open/Close Air Vents  [dots if toggling]
- *   [1]   Restart Cameras       [dots if restarting] [ERR]
- *
- * Navigation: [Up]/[Down] move cursor, [Enter] activates,
- *             [DEL] or [ALPHA] closes.
+ * CONTROL PANEL POPUP
  * ========================================================= */
 void ui_manager_draw_control_panel(UIManager *ui) {
     GameState *gs = &ui->game->state;
 
-    /* Panel background */
     gfx_SetColor(COL_BLACK);
     gfx_FillRectangle(CP_X, CP_Y, CP_W, CP_H);
     gfx_SetColor(COL_GREEN);
     gfx_Rectangle(CP_X, CP_Y, CP_W, CP_H);
 
-    /* Title */
     gfx_SetTextFGColor(COL_GREEN);
     gfx_SetTextScale(2, 2);
     gfx_SetTextXY(CP_X + 8, CP_Y + 8);
     gfx_PrintString("/// Control Panel");
-
     gfx_SetTextScale(1, 1);
 
-    /* --- Option 0: Air Vents --- */
     uint16_t row0_y = CP_Y + 48;
     bool vents_selected = (ui->cp_selected == CP_ITEM_VENTS);
-
     gfx_SetTextFGColor(COL_GREEN);
     gfx_SetTextXY(CP_X + 8, row0_y);
     gfx_PrintChar(vents_selected ? '>' : ' ');
     gfx_SetTextFGColor(COL_WHITE);
     gfx_SetTextXY(CP_X + 20, row0_y);
     gfx_PrintString(gs->vents_closed ? "Open Air Vents" : "Close Air Vents");
-
-    /* Dots while toggling */
     if (ui->vents_dots.running) {
         gfx_SetTextFGColor(COL_GREEN);
         gfx_PrintString(dots_str(ui->vents_dots.frame));
     }
 
-    /* --- Option 1: Restart Cameras --- */
     uint16_t row1_y = row0_y + CP_ROW_H;
     bool cam_selected = (ui->cp_selected == CP_ITEM_CAMERAS);
-
     gfx_SetTextFGColor(COL_GREEN);
     gfx_SetTextXY(CP_X + 8, row1_y);
     gfx_PrintChar(cam_selected ? '>' : ' ');
     gfx_SetTextFGColor(COL_WHITE);
     gfx_SetTextXY(CP_X + 20, row1_y);
     gfx_PrintString("Restart Cameras");
-
-    /* Dots while restarting */
     if (ui->cam_dots.running) {
         gfx_SetTextFGColor(COL_GREEN);
         gfx_PrintString(dots_str(ui->cam_dots.frame));
     }
-
-    /* ERR label */
     if (gs->camera_failed) {
         gfx_SetTextFGColor(COL_RED);
         gfx_SetTextXY(CP_X + CP_W - 40, row1_y);
         gfx_PrintString("ERR");
     }
 
-    /* Controls hint */
     gfx_SetTextFGColor(COL_DIM_WHITE);
     gfx_SetTextXY(CP_X + 8, CP_Y + CP_H - 16);
     gfx_PrintString("[UP/DOWN] Move  [ENTER] Select  [DEL] Close");
 }
 
 /* =========================================================
- * HAWKING WARNING  (replaces updateHawkingWarningDisplay())
- *
- * Draws a flashing warning icon in the HUD area.
- * Level 1 = yellow, level 2 = red.
+ * HAWKING WARNING
  * ========================================================= */
 void ui_manager_draw_hawking_warning(UIManager *ui, uint8_t level) {
-    gfx_sprite_t *spr = (level >= 2) ? spr_warn_red : spr_warn_yellow;
+    gfx_sprite_t *spr = (level >= 2) ? spr_warn_red() : spr_warn_yellow();
     if (spr) {
-        /* Position: just left of the O2 display */
         uint16_t wx = (uint16_t)(LCD_W - 24 - 4);
         uint16_t wy = HUD_Y - spr->height - 2;
-        gfx_Sprite(spr, (int)(wx), (int)(wy));
+        gfx_Sprite(spr, (int)wx, (int)wy);
     } else {
-        /* Fallback: coloured text */
         gfx_SetTextFGColor(level >= 2 ? COL_RED : COL_YELLOW);
         gfx_SetTextScale(1, 1);
         gfx_SetTextXY(LCD_W - 24, HUD_Y - 12);
@@ -577,34 +461,142 @@ void ui_manager_draw_hawking_warning(UIManager *ui, uint8_t level) {
 }
 
 /* =========================================================
- * WIN SCREEN  (replaces playNightEndAnimation())
- * line1 = "5:59 AM" or "6:00 AM"
- * line2 = countdown message (may be NULL)
+ * WIN SCREEN
  * ========================================================= */
 void ui_manager_draw_win_screen(UIManager *ui,
                                  const char *line1, const char *line2) {
+    /* FNAF-style salary/newspaper screen — Epstein island theming.
+     * Styled as a redacted government document / paycheck. */
     gfx_FillScreen(COL_BLACK);
-    gfx_SetTextFGColor(COL_WHITE);
-    gfx_SetTextScale(3, 3);
-    draw_centred_text(line1, LCD_H / 2 - 24, 3);
 
+    /* Top border */
+    gfx_SetColor(COL_GREEN);
+    gfx_HorizLine(0, 0, LCD_W);
+    gfx_HorizLine(0, 2, LCD_W);
+
+    /* Header — redacted document style */
+    gfx_SetTextFGColor(COL_GREEN);
+    gfx_SetTextScale(1, 1);
+    gfx_SetTextXY(4, 8);
+    gfx_PrintString("LITTLE ST. JAMES ISLAND TRUST");
+    gfx_SetTextXY(4, 18);
+    gfx_PrintString("NIGHT WATCHMAN PAYMENT RECORD");
+
+    /* Divider */
+    gfx_HorizLine(0, 28, LCD_W);
+
+    /* Redacted fields */
+    gfx_SetTextFGColor(COL_WHITE);
+    gfx_SetTextScale(1, 1);
+    gfx_SetTextXY(4, 36);  gfx_PrintString("EMPLOYEE  : [REDACTED]");
+    gfx_SetTextXY(4, 48);  gfx_PrintString("CLEARANCE : LEVEL [REDACTED]");
+    gfx_SetTextXY(4, 60);  gfx_PrintString("LOCATION  : [REDACTED], U.S.V.I.");
+    gfx_SetTextXY(4, 72);  gfx_PrintString("SHIFT     : 12AM - 6AM");
+
+    /* Divider */
+    gfx_SetColor(COL_GREEN);
+    gfx_HorizLine(0, 84, LCD_W);
+
+    /* Time — big */
+    gfx_SetTextFGColor(COL_GREEN);
+    gfx_SetTextScale(3, 3);
+    draw_centred_text(line1, 94, 3);
+
+    /* Night complete message */
     if (line2) {
-        gfx_SetTextScale(2, 2);
+        gfx_SetColor(COL_GREEN);
+        gfx_HorizLine(0, 136, LCD_W);
         gfx_SetTextFGColor(COL_WHITE);
-        draw_centred_text(line2, LCD_H / 2 + 16, 2);
+        gfx_SetTextScale(1, 1);
+        draw_centred_text(line2, 144, 1);
     }
+
+    /* Bottom — pay stub */
+    gfx_SetColor(COL_GREEN);
+    gfx_HorizLine(0, 160, LCD_W);
+    gfx_SetTextFGColor(COL_GREEN);
+    gfx_SetTextScale(1, 1);
+    gfx_SetTextXY(4, 168); gfx_PrintString("NIGHTLY RATE : $[REDACTED]");
+    gfx_SetTextXY(4, 180); gfx_PrintString("BONUS        : DO NOT DISCUSS");
+    gfx_SetTextXY(4, 192); gfx_PrintString("SIGNED       : J.E. / G.M.");
+
+    /* Footer */
+    gfx_SetColor(COL_GREEN);
+    gfx_HorizLine(0, 206, LCD_W);
+    gfx_SetTextFGColor(COL_DIM_WHITE);
+    gfx_SetTextScale(1, 1);
+    draw_centred_text("THIS DOCUMENT IS [REDACTED]", 212, 1);
+    draw_centred_text("DESTROY AFTER READING", 222, 1);
+
     (void)ui;
 }
 
 /* =========================================================
- * GAME OVER SCREEN  (replaces gameOverScreen())
+ * GAME OVER SCREEN
  * ========================================================= */
+void ui_manager_draw_cutscene(UIManager *ui) {
+    /* Redacted newspaper ad — shown on game start.
+     * Styled as a classified government job listing with
+     * Epstein island references, all key details redacted. */
+    gfx_FillScreen(COL_BLACK);
+
+    /* Outer border — newspaper style */
+    gfx_SetColor(COL_WHITE);
+    gfx_Rectangle(2, 2, LCD_W-4, LCD_H-4);
+    gfx_Rectangle(4, 4, LCD_W-8, LCD_H-8);
+
+    /* Masthead */
+    gfx_SetTextFGColor(COL_WHITE);
+    gfx_SetTextScale(1, 1);
+    draw_centred_text("THE [REDACTED] GAZETTE", 10, 1);
+    gfx_SetColor(COL_WHITE);
+    gfx_HorizLine(8, 20, LCD_W-16);
+
+    /* Headline */
+    gfx_SetTextFGColor(COL_WHITE);
+    gfx_SetTextScale(2, 2);
+    draw_centred_text("HELP WANTED", 26, 2);
+    gfx_SetTextScale(1, 1);
+    draw_centred_text("PRIVATE ISLAND SECURITY POSITION", 46, 1);
+
+    gfx_SetColor(COL_WHITE);
+    gfx_HorizLine(8, 56, LCD_W-16);
+
+    /* Body text — redacted job listing */
+    gfx_SetTextFGColor(COL_WHITE);
+    gfx_SetTextScale(1, 1);
+    uint8_t y = 62;
+    gfx_SetTextXY(10, y); gfx_PrintString("[REDACTED] ISLAND RESORT"); y+=10;
+    gfx_SetTextXY(10, y); gfx_PrintString("U.S. VIRGIN ISLANDS"); y+=10;
+    gfx_SetTextXY(10, y); gfx_PrintString(""); y+=6;
+    gfx_SetTextXY(10, y); gfx_PrintString("SEEKING NIGHT WATCHMAN"); y+=10;
+    gfx_SetTextXY(10, y); gfx_PrintString("HOURS: 12AM TO 6AM"); y+=10;
+    gfx_SetTextXY(10, y); gfx_PrintString("PAY: $[REDACTED]/NIGHT"); y+=10;
+    gfx_SetTextXY(10, y); gfx_PrintString(""); y+=6;
+    gfx_SetTextXY(10, y); gfx_PrintString("DUTIES INCLUDE:"); y+=10;
+    gfx_SetTextXY(10, y); gfx_PrintString("- MONITOR [REDACTED]"); y+=10;
+    gfx_SetTextXY(10, y); gfx_PrintString("- ENSURE [REDACTED]"); y+=10;
+    gfx_SetTextXY(10, y); gfx_PrintString("- DO NOT DISCUSS [REDACTED]"); y+=10;
+    gfx_SetTextXY(10, y); gfx_PrintString("- SIGN NDA RE: [REDACTED]"); y+=10;
+
+    gfx_SetColor(COL_WHITE);
+    gfx_HorizLine(8, y+2, LCD_W-16); y+=8;
+
+    gfx_SetTextXY(10, y); gfx_PrintString("CONTACT: [REDACTED]"); y+=10;
+    gfx_SetTextXY(10, y); gfx_PrintString("REF: FILE [REDACTED]-JE"); y+=10;
+
+    /* Fine print */
+    gfx_SetTextFGColor(COL_DIM_WHITE);
+    draw_centred_text("[PRESS ANY KEY]", LCD_H-14, 1);
+
+    (void)ui;
+}
+
 void ui_manager_draw_game_over(UIManager *ui, bool win) {
     gfx_FillScreen(COL_BLACK);
     gfx_SetTextFGColor(win ? COL_GREEN : COL_RED);
     gfx_SetTextScale(3, 3);
     draw_centred_text(win ? "YOU WIN" : "GAME OVER", LCD_H / 2 - 12, 3);
-
     gfx_SetTextFGColor(COL_DIM_WHITE);
     gfx_SetTextScale(1, 1);
     draw_centred_text("Returning to menu...", LCD_H / 2 + 24, 1);
@@ -612,80 +604,81 @@ void ui_manager_draw_game_over(UIManager *ui, bool win) {
 }
 
 /* =========================================================
- * GOLDEN STEPHEN OVERLAY  (replaces showGoldenStephen())
- * alpha: 0-255 simulated via colour selection
+ * GOLDEN STEPHEN OVERLAY
  * ========================================================= */
 void ui_manager_draw_golden_stephen(UIManager *ui, uint8_t alpha) {
-    if (!spr_golden_stephen) {
-        /* Fallback text flash */
-        if (alpha > 64) {
-            gfx_SetTextFGColor(COL_YELLOW);
-            gfx_SetTextScale(2, 2);
-            draw_centred_text("GOLDEN STEPHEN!", LCD_H / 2 - 8, 2);
-        }
-        return;
-    }
-    /* Scale sprite to fill ~80% of screen, centred */
-    uint16_t w = (uint16_t)(LCD_W * 8 / 10);
-    uint16_t h = (uint16_t)(LCD_H * 8 / 10);
-    uint16_t x = (LCD_W - w) / 2;
-    uint16_t y = (LCD_H - h) / 2;
-    gfx_TransparentSprite(spr_golden_stephen, x, y);
-    (void)alpha;
+    /* Text-only golden stephen easter egg — no sprite needed.
+     * Draws a glitchy "corrupted file" style flash. */
+    if (alpha < 64) { (void)ui; return; }
+
+    /* Flicker background tint */
+    gfx_SetColor(COL_YELLOW);
+    for (int y = 0; y < LCD_H; y += 8)
+        gfx_HorizLine(0, y, LCD_W);
+
+    gfx_SetTextFGColor(COL_BLACK);
+    gfx_SetTextScale(1, 1);
+    draw_centred_text("CLASSIFIED - LEVEL 5 CLEARANCE", 40, 1);
+
+    gfx_SetTextFGColor(COL_BLACK);
+    gfx_SetTextScale(3, 3);
+    draw_centred_text("GOLDEN", LCD_H/2 - 30, 3);
+    draw_centred_text("STEPHEN", LCD_H/2 + 6, 3);
+
+    gfx_SetTextFGColor(COL_BLACK);
+    gfx_SetTextScale(1, 1);
+    draw_centred_text("[REDACTED] ISLAND TRUST FUND", LCD_H - 30, 1);
+    draw_centred_text("FILE NO. [REDACTED]", LCD_H - 18, 1);
     (void)ui;
 }
 
 /* =========================================================
- * SPRITE HELPERS  (used by enemy_ai.c)
+ * SPRITE HELPERS
  * ========================================================= */
 void ui_manager_draw_sprite_scaled(UIManager *ui, int spr_id,
                                     uint16_t x, uint16_t y,
                                     uint16_t w, uint16_t h) {
     gfx_sprite_t *spr = NULL;
-    if (spr_id == 0) spr = spr_office;
-    else if (spr_id < (int)(sizeof(sprite_table)/sizeof(sprite_table[0])))
-        spr = sprite_table[spr_id];
-
+    if (spr_id == 0) {
+        spr = spr_office();
+    } else if (spr_id < (int)(sizeof(sprite_table_compressed)/sizeof(sprite_table_compressed[0]))) {
+        spr = scratch_decompress(sprite_table_compressed[spr_id]);
+    }
     if (!spr) return;
-
-    /* CE's gfx_ScaledSprite_NoClip requires integer scale factors.
-     * For arbitrary w/h we use gfx_ScaledTransparentSprite_NoClip
-     * or a simple stretch loop.  For correctness we use the built-in
-     * scaled blit if available, otherwise just blit unscaled centred. */
-    gfx_ScaledSprite_NoClip(spr, x, y,
-        (uint8_t)(w / spr->width  + 1),
-        (uint8_t)(h / spr->height + 1));
+    /* spr_id==1 was jumptrump (2x trump). Now it's trump5 (full body).
+     * Double w and h so the jumpscare fills the same screen area,
+     * then clip to LCD bounds to simulate the zoom crop. */
+    if (spr_id == 1) { w = (uint16_t)(w * 2); h = (uint16_t)(h * 2); }
+    uint8_t sx = (uint8_t)(w / spr->width  + 1);
+    uint8_t sy = (uint8_t)(h / spr->height + 1);
+    gfx_SetClipRegion(0, 0, LCD_W, LCD_H);
+    gfx_ScaledTransparentSprite_NoClip(spr, x, y, sx, sy);
     (void)ui;
 }
 
 void ui_manager_draw_explosion_frame(UIManager *ui, uint8_t frame) {
-    /* spr_explosion is a horizontal spritesheet: 4 equal-width frames */
-    if (!spr_explosion) {
+    gfx_sprite_t *spr = spr_explosion();
+    if (!spr) {
         gfx_FillScreen(COL_RED);
         return;
     }
-    /* Each frame is spr_explosion->width / 4 wide */
-    uint16_t fw = spr_explosion->width / 4;
-    uint16_t fh = spr_explosion->height;
+    uint16_t fw = spr->width / 4;
+    uint16_t fh = spr->height;
     uint16_t sx = (frame % 4) * fw;
-
-    /* Draw the sub-region centred on screen */
     uint16_t dx = (LCD_W - fw) / 2;
     uint16_t dy = (LCD_H - fh) / 2;
-
-    /* CE doesn't have a direct sub-sprite blit; use a clipped region */
     gfx_SetClipRegion(dx, dy, dx + fw, dy + fh);
-    gfx_Sprite(spr_explosion, (int)(dx - sx), dy);
+    gfx_Sprite(spr, (int)(dx - sx), dy);
     gfx_SetClipRegion(0, 0, LCD_W, LCD_H);
     (void)ui;
 }
 
 /* =========================================================
- * CONTROL PANEL INPUT CALLBACKS  (called by input_handler)
+ * CONTROL PANEL INPUT CALLBACKS
  * ========================================================= */
 void ui_manager_on_control_panel_toggle(UIManager *ui) {
     if (ui->control_panel_open && ui->game->state.control_panel_busy) return;
-    ui->control_panel_open          = !ui->control_panel_open;
+    ui->control_panel_open             = !ui->control_panel_open;
     ui->game->state.control_panel_open = ui->control_panel_open;
     if (ui->control_panel_open) {
         ui->game->is_rotating_left  = false;

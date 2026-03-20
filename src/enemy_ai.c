@@ -195,8 +195,7 @@ static CamID choose_next_location(
         CamID   from,
         const int8_t *depth_table,
         uint8_t  prob_fwd,   /* 0-100 */
-        uint8_t  prob_lat,
-        uint8_t  prob_bck)
+        uint8_t  prob_lat)
 {
     int8_t cur_depth = depth_table[from];
     if (cur_depth < 0) return CAM_COUNT;  /* crawling/invalid */
@@ -431,15 +430,14 @@ static void ep_check_movement(EnemyAI *ai) {
     /* Night 4 aggressive mode: at 4AM, forward only */
     uint8_t fwd = ai->ep_cfg.prob_forward;
     uint8_t lat = ai->ep_cfg.prob_lateral;
-    uint8_t bck = ai->ep_cfg.prob_backward;
     if (ai->game->state.current_night == 4 &&
         ai->game->state.current_time >= 4) {
-        fwd = 100; lat = 0; bck = 0;
+        fwd = 100; lat = 0;
         ai->epstein.night4_aggressive = true;
     }
 
     CamID next = choose_next_location(
-        ai->epstein.location, CAM_DEPTH, fwd, lat, bck);
+        ai->epstein.location, CAM_DEPTH, fwd, lat);
     if (next == CAM_COUNT) return;
 
     ai->epstein.location = next;
@@ -482,10 +480,9 @@ static void trump_check_movement(EnemyAI *ai) {
     /* Night 5 aggressive at 4AM */
     uint8_t fwd = ai->tr_cfg.prob_forward;
     uint8_t lat = ai->tr_cfg.prob_lateral;
-    uint8_t bck = ai->tr_cfg.prob_backward;
     if (ai->game->state.current_night == 5 &&
         ai->game->state.current_time >= 4) {
-        fwd = 100; lat = 0; bck = 0;
+        fwd = 100; lat = 0;
         cam1_prob = 100;
         cam2_prob = 80;
         ai->trump.night5_aggressive = true;
@@ -501,7 +498,7 @@ static void trump_check_movement(EnemyAI *ai) {
     }
 
     CamID next = choose_next_location(
-        loc, CAM_DEPTH, fwd, lat, bck);
+        loc, CAM_DEPTH, fwd, lat);
     if (next == CAM_COUNT) return;
 
     ai->trump.location = next;

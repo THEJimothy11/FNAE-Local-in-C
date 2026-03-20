@@ -5,11 +5,11 @@
 extern "C" {
 #endif
 
-#define trump2_width 240
-#define trump2_height 240
-#define trump2_size 57602
-#define trump2 ((gfx_sprite_t*)trump2_data)
-extern unsigned char trump2_data[57602];
+#define trump2_width 160
+#define trump2_height 120
+#define trump2_size 19202
+#define trump2_compressed_size 5309
+extern unsigned char trump2_compressed[5309];
 
 #ifdef __cplusplus
 }

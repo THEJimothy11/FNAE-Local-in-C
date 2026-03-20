@@ -5,11 +5,11 @@
 extern "C" {
 #endif
 
-#define menubackground_width 240
+#define menubackground_width 320
 #define menubackground_height 240
-#define menubackground_size 57602
-#define menubackground ((gfx_sprite_t*)menubackground_data)
-extern unsigned char menubackground_data[57602];
+#define menubackground_size 76800
+#define menubackground_compressed_size 8406
+extern unsigned char menubackground_compressed[8406];
 
 #ifdef __cplusplus
 }

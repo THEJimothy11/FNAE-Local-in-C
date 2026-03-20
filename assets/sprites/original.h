@@ -5,11 +5,11 @@
 extern "C" {
 #endif
 
-#define original_width 255
+#define original_width 320
 #define original_height 240
-#define original_size 61202
-#define original ((gfx_sprite_t*)original_data)
-extern unsigned char original_data[61202];
+#define original_size 76800
+#define original_compressed_size 23023
+extern unsigned char original_compressed[23023];
 
 #ifdef __cplusplus
 }

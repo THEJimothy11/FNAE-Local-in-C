@@ -7,76 +7,110 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <graphx.h>
+#include <compression.h>   /* zx0_Decompress */
 
 #include "camera_system.h"
 #include "game.h"
 #include "game_state.h"
 #include "enemy_ai.h"
 #include "ui_manager.h"
-
-/* =========================================================
- * SPRITE INCLUDES
- * convimg generates raw unsigned char[] arrays when
- * width-and-height is not stored in the sprite.
- * We cast them to gfx_sprite_t* for use with gfx_ functions,
- * and store dimensions separately as constants.
- * ========================================================= */
 #include "sprites.h"
+#include "decomp_buf.h"
 
-/* Since all images were resized to 240x240, all sprites are
- * 240 wide and 240 tall unless otherwise noted.             */
-#define SPR_W  240
-#define SPR_H  240
-
-/* Cast a raw convimg array to gfx_sprite_t pointer.
- * convimg lays out data as: [width_hi, width_lo, height_hi,
- * height_lo, data...] when width-and-height is true (default).
- * After resizing to <=255px, the struct layout is valid.    */
-#define AS_SPR(name)  ((gfx_sprite_t *)(name))
+/* Camera feeds and character overlays are 160x120 after resize.bat.
+ * They are drawn scaled 2x → 320x240 on screen.
+ * Map layout is 160x240. */
+#define CAM_W   160
+#define CAM_H   120
+#define MAP_W   160
+#define MAP_H   240
 
 /* =========================================================
- * SPRITE LOOKUP TABLES
+ * DECOMPRESSION BUFFERS
+ * We use the two shared global buffers from decomp_buf.h
+ * instead of private static arrays to stay within RAM limits.
+ *
+ * decomp_buf_a — current camera background (cached by cam_bg_loaded)
+ * decomp_buf_b — character/overlay sprites (overwritten each draw)
+ *
+ * map_layout is small enough to cache in buf_b once, but since
+ * it's always drawn before any character sprite in draw_camera_map,
+ * we decompress it into buf_a and keep it there between frames.
  * ========================================================= */
-static gfx_sprite_t *cam_sprites[12];
-static gfx_sprite_t *ep_sprites[12];
-static gfx_sprite_t *trump_sprites[12];
+#define cam_bg_buffer  decomp_buf_a   /* cached camera background */
+#define char_buf       decomp_buf_b   /* scratch for chars/overlays */
+#define map_buf        decomp_buf_b   /* map drawn before chars, safe to alias */
+
+static bool    map_loaded    = false;
+static CamID   cam_bg_loaded = CAM_COUNT;
+
+/* =========================================================
+ * COMPRESSED SPRITE TABLES
+ * ========================================================= */
+static const void *cam_compressed[12] = {
+    NULL,
+    Cam1_compressed,
+    Cam2_compressed,
+    Cam3_compressed,
+    Cam4_compressed,
+    Cam5_compressed,
+    Cam6_compressed,
+    Cam7_compressed,
+    Cam8_compressed,
+    Cam9_compressed,
+    Cam10_compressed,
+    Cam11_compressed,
+};
+
+static const void *ep_sprites[12];
+static const void *trump_sprites[12];
+/* If trump_zoom[i] is true, draw trump_sprites[i] scaled 2x
+ * clipped to CAM_W x CAM_H, simulating the cropped/zoomed variants.
+ * false = draw normally at 2x (full body visible). */
+static bool trump_zoom[12];
 
 static void init_sprite_tables(void) {
-    cam_sprites[1]  = AS_SPR(Cam1_data);
-    cam_sprites[2]  = AS_SPR(Cam2_data);
-    cam_sprites[3]  = AS_SPR(Cam3_data);
-    cam_sprites[4]  = AS_SPR(Cam4_data);
-    cam_sprites[5]  = AS_SPR(Cam5_data);
-    cam_sprites[6]  = AS_SPR(Cam6_data);
-    cam_sprites[7]  = AS_SPR(Cam7_data);
-    cam_sprites[8]  = AS_SPR(Cam8_data);
-    cam_sprites[9]  = AS_SPR(Cam9_data);
-    cam_sprites[10] = AS_SPR(Cam10_data);
-    cam_sprites[11] = AS_SPR(Cam11_data);
+    ep_sprites[1]  = ep4_compressed;
+    ep_sprites[2]  = enemyep1_compressed;
+    ep_sprites[3]  = ep4_compressed;
+    ep_sprites[4]  = ep1_compressed;
+    ep_sprites[5]  = enemyep4_compressed;
+    ep_sprites[6]  = enemyep1_compressed;
+    ep_sprites[7]  = enemyep1_compressed;
+    ep_sprites[8]  = enemyep1_compressed;
+    ep_sprites[9]  = enemyep1_compressed;
+    ep_sprites[10] = ep1_compressed;
+    ep_sprites[11] = enemyep1_compressed;
 
-    ep_sprites[1]  = AS_SPR(ep4_data);
-    ep_sprites[2]  = AS_SPR(enemyep1_data);
-    ep_sprites[3]  = AS_SPR(ep4_data);
-    ep_sprites[4]  = AS_SPR(ep1_data);
-    ep_sprites[5]  = AS_SPR(enemyep4_data);
-    ep_sprites[6]  = AS_SPR(enemyep1_data);
-    ep_sprites[7]  = AS_SPR(enemyep1_data);
-    ep_sprites[8]  = AS_SPR(enemyep1_data);
-    ep_sprites[9]  = AS_SPR(enemyep1_data);
-    ep_sprites[10] = AS_SPR(ep1_data);
-    ep_sprites[11] = AS_SPR(enemyep1_data);
+    /* Sprite remapping:
+     *   trump3 (zoomed in, upper 2/3) → trump4 + trump_zoom=true
+     *   trump  (zoomed in, upper 2/3) → trump5 + trump_zoom=true
+     *   jumptrump (trump scaled 2x)   → trump5 + trump_zoom=false (just big)
+     * trump_zoom=true: draw at 2x scale, clip to CAM_W x CAM_H
+     *   → shows only top 2/3 of sprite, matching original zoom */
+    trump_sprites[1]  = trump4_compressed;  trump_zoom[1]  = false;
+    trump_sprites[2]  = trump4_compressed;  trump_zoom[2]  = false;
+    trump_sprites[3]  = trump2_compressed;  trump_zoom[3]  = false;
+    trump_sprites[4]  = trump4_compressed;  trump_zoom[4]  = true;  /* was trump3 */
+    trump_sprites[5]  = trump2_compressed;  trump_zoom[5]  = false;
+    trump_sprites[6]  = trump4_compressed;  trump_zoom[6]  = true;  /* was trump3 */
+    trump_sprites[7]  = trump4_compressed;  trump_zoom[7]  = true;  /* was trump3 */
+    trump_sprites[8]  = trump5_compressed;  trump_zoom[8]  = false;
+    trump_sprites[9]  = trump5_compressed;  trump_zoom[9]  = true;  /* was trump */
+    trump_sprites[10] = trump4_compressed;  trump_zoom[10] = true;  /* was trump3 */
+    trump_sprites[11] = trump4_compressed;  trump_zoom[11] = true;  /* was trump3 */
+}
 
-    trump_sprites[1]  = AS_SPR(trump4_data);
-    trump_sprites[2]  = AS_SPR(trump4_data);
-    trump_sprites[3]  = AS_SPR(trump2_data);
-    trump_sprites[4]  = AS_SPR(trump3_data);
-    trump_sprites[5]  = AS_SPR(trump2_data);
-    trump_sprites[6]  = AS_SPR(trump3_data);
-    trump_sprites[7]  = AS_SPR(trump3_data);
-    trump_sprites[8]  = AS_SPR(trump5_data);
-    trump_sprites[9]  = AS_SPR(trump_data);
-    trump_sprites[10] = AS_SPR(trump3_data);
-    trump_sprites[11] = AS_SPR(trump3_data);
+/* =========================================================
+ * CAMERA BACKGROUND DECOMPRESSION
+ * Only decompresses when the camera actually changes.
+ * ========================================================= */
+static void camera_load(uint8_t cam_num) {
+    if (cam_num < 1 || cam_num > 11) return;
+    CamID id = (CamID)(cam_num - 1);
+    if (cam_bg_loaded == id) return;
+    zx0_Decompress(cam_bg_buffer, cam_compressed[cam_num]);
+    cam_bg_loaded = id;
 }
 
 /* =========================================================
@@ -119,7 +153,9 @@ static void draw_static_noise(void) {
  * ========================================================= */
 void camera_system_init(CameraSystem *cs, struct Game *game) {
     memset(cs, 0, sizeof(CameraSystem));
-    cs->game = game;
+    cs->game      = game;
+    cam_bg_loaded = CAM_COUNT;
+    map_loaded    = false;
     init_sprite_tables();
 }
 
@@ -136,6 +172,7 @@ void camera_system_reset(CameraSystem *cs) {
     cs->showing_failure    = false;
     cs->last_ep_location   = CAM_COUNT;
     memset(cs->location_attract_count, 0, sizeof(cs->location_attract_count));
+    cam_bg_loaded = CAM_COUNT;
 }
 
 /* =========================================================
@@ -188,8 +225,10 @@ static void transition_update(CameraSystem *cs, uint32_t dt) {
                     cs->trans_phase = CAM_TRANS_IDLE;
                     return;
                 }
-                if (cs->trans_is_switch && cs->pending_cam != CAM_COUNT)
+                if (cs->trans_is_switch && cs->pending_cam != CAM_COUNT) {
                     cs->game->state.current_cam = cs->pending_cam;
+                    cam_bg_loaded = CAM_COUNT;
+                }
                 camera_system_update_character_display(cs);
             }
             break;
@@ -246,6 +285,7 @@ static void restart_update(CameraSystem *cs, uint32_t dt) {
         cs->game->state.control_panel_busy = false;
         cs->showing_failure                = false;
         cs->restart_phase                  = CAM_RESTART_IDLE;
+        cam_bg_loaded = CAM_COUNT;
         camera_system_reset_sound_count(cs);
         if (cs->game->state.camera_open)
             camera_system_update_character_display(cs);
@@ -318,7 +358,11 @@ void camera_system_update(CameraSystem *cs, uint32_t dt) {
  * DRAW CAMERA MAP
  * ========================================================= */
 static void draw_camera_map(CameraSystem *cs) {
-    gfx_Sprite_NoClip(AS_SPR(map_layout_data), 0, 0);
+    if (!map_loaded) {
+        zx0_Decompress(map_buf, map_layout_compressed);
+        map_loaded = true;
+    }
+    gfx_Sprite_NoClip((gfx_sprite_t *)map_buf, 0, 0);
 
     gfx_SetColor(4);
     gfx_FillRectangle(YOU_X, YOU_Y, YOU_W, YOU_H);
@@ -341,8 +385,8 @@ static void draw_camera_map(CameraSystem *cs) {
 
         CamID ep_loc    = enemy_ai_ep_location(&cs->game->ai);
         CamID trump_loc = enemy_ai_trump_location(&cs->game->ai);
-        if (ep_loc    == p->cam_id) { gfx_SetColor(3); gfx_FillCircle(p->x+p->w-5, p->y+4, 3); }
-        if (trump_loc == p->cam_id) { gfx_SetColor(5); gfx_FillCircle(p->x+p->w-10,p->y+4, 3); }
+        if (ep_loc    == p->cam_id) { gfx_SetColor(3); gfx_FillCircle(p->x+p->w-5,  p->y+4, 3); }
+        if (trump_loc == p->cam_id) { gfx_SetColor(5); gfx_FillCircle(p->x+p->w-10, p->y+4, 3); }
         if (p->cam_id == CAM_6 && enemy_ai_hawking_warning(&cs->game->ai) > 0)
             { gfx_SetColor(5); gfx_FillCircle(p->x+4, p->y+4, 3); }
     }
@@ -359,39 +403,59 @@ static void draw_camera_feed(CameraSystem *cs) {
     for (uint8_t i = 0; i < (uint8_t)N_CAMS; i++)
         if (CAM_MAP_POSITIONS[i].cam_id == cam) { cam_idx = CAM_MAP_POSITIONS[i].cam_num; break; }
 
-    if (cam_idx > 0 && cam_sprites[cam_idx])
-        gfx_Sprite_NoClip(cam_sprites[cam_idx], 0, 0);
-    else
+    /* Decompress and draw background scaled 2x (160x120 -> 320x240) */
+    if (cam_idx > 0) {
+        camera_load(cam_idx);
+        gfx_ScaledSprite_NoClip((gfx_sprite_t *)cam_bg_buffer, 0, 0, 2, 2);
+    } else {
         gfx_FillScreen(4);
+    }
 
-    /* Hawking at CAM 6 */
-    if (cam == CAM_6)
-        gfx_TransparentSprite(AS_SPR(mrstephen_data), 0, LCD_H - SPR_H / 2);
+    /* Hawking at CAM 6 - scaled 2x, anchored to bottom */
+    if (cam == CAM_6) {
+        zx0_Decompress(char_buf, mrstephen_compressed);
+        gfx_ScaledTransparentSprite_NoClip((gfx_sprite_t *)char_buf,
+            0, LCD_H - CAM_H, 2, 2);
+    }
 
-    /* Epstein */
+    /* Epstein - scaled 2x */
     CamID ep_loc = enemy_ai_ep_location(&cs->game->ai);
-    if (cs->game->ai.epstein.has_spawned && ep_loc == cam && cam_idx > 0 && ep_sprites[cam_idx]) {
-        gfx_TransparentSprite(ep_sprites[cam_idx], 0, 0);
+    if (cs->game->ai.epstein.has_spawned && ep_loc == cam
+            && cam_idx > 0 && ep_sprites[cam_idx]) {
+        zx0_Decompress(char_buf, ep_sprites[cam_idx]);
+        gfx_ScaledTransparentSprite_NoClip((gfx_sprite_t *)char_buf, 0, 0, 2, 2);
         if (night == 6) {
             gfx_SetColor(2);
             for (int d = 0; d < 8; d++)
-                gfx_SetPixel(SPR_W/2 + (rand()%10)-5, SPR_H/3 + (rand()%6)-3);
+                gfx_SetPixel(CAM_W + (rand()%10)-5, (CAM_H*2)/3 + (rand()%6)-3);
         }
     }
 
-    /* Trump — access via pointer to avoid convimg's 'trump' macro conflict */
+    /* Trump - scaled 2x, with optional zoom crop */
     {
         TrumpState *tr = &cs->game->ai.trump;
         CamID trump_loc = enemy_ai_trump_location(&cs->game->ai);
         if (tr->has_spawned && !enemy_ai_trump_crawling(&cs->game->ai)
-            && trump_loc == cam && cam_idx > 0 && trump_sprites[cam_idx])
-            gfx_TransparentSprite(trump_sprites[cam_idx], 0, 0);
+                && trump_loc == cam && cam_idx > 0 && trump_sprites[cam_idx]) {
+            zx0_Decompress(char_buf, trump_sprites[cam_idx]);
+            if (trump_zoom[cam_idx]) {
+                /* Simulate zoomed-in variant: draw at 2x scale but clip to
+                 * CAM_W x CAM_H. This shows only the top 2/3 of the sprite
+                 * (top 80px of 120px source = upper 2/3), matching the
+                 * original trump3/trump behaviour. */
+                gfx_SetClipRegion(LCD_W/2, 0, LCD_W/2 + CAM_W*2, CAM_H*2);
+                gfx_ScaledTransparentSprite_NoClip((gfx_sprite_t *)char_buf, 0, 0, 2, 2);
+                gfx_SetClipRegion(LCD_W/2, 0, LCD_W, LCD_H);
+            } else {
+                gfx_ScaledTransparentSprite_NoClip((gfx_sprite_t *)char_buf, 0, 0, 2, 2);
+            }
+        }
     }
 
     /* Cam label */
     char label[10];
     snprintf(label, sizeof(label), "CAM %u", cam_idx);
-    gfx_SetTextFGColor(1); gfx_SetTextScale(1,1);
+    gfx_SetTextFGColor(1); gfx_SetTextScale(1, 1);
     gfx_SetTextXY(4, 4); gfx_PrintString(label);
 
     uint8_t hw = enemy_ai_hawking_warning(&cs->game->ai);
@@ -420,7 +484,7 @@ static void draw_camera_feed(CameraSystem *cs) {
 void camera_system_draw(CameraSystem *cs) {
     if (cs->showing_failure || cs->game->state.camera_failed) {
         draw_static_noise();
-        gfx_SetTextFGColor(3); gfx_SetTextScale(3,3);
+        gfx_SetTextFGColor(3); gfx_SetTextScale(3, 3);
         gfx_SetTextXY(LCD_W/2-18, LCD_H/2-12);
         gfx_PrintString("ERR");
         return;
@@ -438,7 +502,7 @@ void camera_system_draw(CameraSystem *cs) {
 
     if (in_trans) draw_static_noise();
 
-    gfx_SetTextFGColor(6); gfx_SetTextScale(1,1);
+    gfx_SetTextFGColor(6); gfx_SetTextScale(1, 1);
     gfx_SetTextXY(4, LCD_H-32);
     gfx_PrintString("[<>]Cams [ALPHA]Close");
 }

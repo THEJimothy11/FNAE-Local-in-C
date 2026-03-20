@@ -1,22 +1,28 @@
 # convimg.yaml
 # Run from the assets/ folder: convimg
-# Output: sprites/gfx.c and sprites/gfx.h
 #
-# IMPORTANT before running:
-#   2. Resize all images to 240x240:
-#      magick mogrify -resize 240x240 images\*.png
-#   3. Delete old sprites folder and recreate it:
-#      rd /s /q sprites && mkdir sprites
-#   4. Run: convimg
+# Changes from previous version:
+#   - compress: zx0  (better ratio than zx7, same decompression speed)
+#   - scaryhawk, scarytrump, scaryep REMOVED (menu stays on menubackground)
+#   - fa3 moved to gfx convert at 80x80 (corner overlay, not fullscreen)
+#
+# Sprite size targets (after running resize.bat):
+#   Camera feeds + characters : 160x120  (gfx convert)
+#   Map layout                : 160x240  (gfx convert)
+#   Warning indicators + star : 32x32    (gfx convert)
+#   Explosion spritesheet     : 160x40   (gfx convert)
+#   fa3 fan overlay           : 80x80    (gfx convert)
+#   Full-screen               : 320x240  (gfx_fullscreen convert)
 
 palettes:
   - name: global_palette
     images: automatic
 
 converts:
+  # --- Standard sprites (width <= 255) ---
   - name: gfx
     palette: global_palette
-    compress: zx7
+    compress: zx0
     images:
       - images/Cam1.png
       - images/Cam2.png
@@ -29,34 +35,31 @@ converts:
       - images/Cam9.png
       - images/Cam10.png
       - images/Cam11.png
-      - images/map_layout.png
-      - images/Warningheavy.png
-      - images/Warninglight.png
-      - images/cutscene.png
       - images/enemyep1.png
       - images/enemyep4.png
       - images/ep1.png
       - images/ep4.png
-      - images/exp2.png
-      - images/fa3.png
-      - images/front.png
-      - images/goldenstephen.png
-      - images/jump.png
-      - images/jumptrump.png
-      - images/menubackground.png
       - images/mrstephen.png
-      - images/original.png
-      - images/scaryep.png
-      - images/scaryhawk.png
-      - images/scaryhawking.png
-      - images/scarytrump.png
-      - images/star.png
-      - images/trump.png
       - images/trump2.png
-      - images/trump3.png
       - images/trump4.png
       - images/trump5.png
-      - images/winscreen.png
+      - images/map_layout.png
+      - images/Warningheavy.png
+      - images/Warninglight.png
+      - images/star.png
+      - images/exp2.png
+      - images/fa3.png
+
+  # --- Full-screen sprites (320x240, width-and-height disabled) ---
+  - name: gfx_fullscreen
+    palette: global_palette
+    compress: zx0
+    width-and-height: false
+    images:
+      - images/jump.png
+      - images/menubackground.png
+      - images/original.png
+      - images/scaryhawking.png
 
 outputs:
   - type: c
@@ -66,3 +69,4 @@ outputs:
       - global_palette
     converts:
       - gfx
+      - gfx_fullscreen

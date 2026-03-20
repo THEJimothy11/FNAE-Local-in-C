@@ -5,11 +5,11 @@
 extern "C" {
 #endif
 
-#define ep1_width 240
-#define ep1_height 240
-#define ep1_size 57602
-#define ep1 ((gfx_sprite_t*)ep1_data)
-extern unsigned char ep1_data[57602];
+#define ep1_width 160
+#define ep1_height 120
+#define ep1_size 19202
+#define ep1_compressed_size 76
+extern unsigned char ep1_compressed[76];
 
 #ifdef __cplusplus
 }

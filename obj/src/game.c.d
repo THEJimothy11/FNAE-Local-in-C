@@ -14,4 +14,5 @@ obj/src/game.c.bc: src\game.c C:\CEdev\include\tice.h \
   C:\CEdev\include\keypadc.h C:\CEdev\include\fileioc.h \
   C:\CEdev\include\stdio.h C:\CEdev\include\stdarg.h \
   C:\CEdev\include\string.h src\game.h src\game_state.h src\enemy_ai.h \
-  src\camera_system.h src\ui_manager.h src\input_handler.h
+  src\camera_system.h src\ui_manager.h src\input_handler.h \
+  src\..\assets\sprites\global_palette.h
