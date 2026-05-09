@@ -8,8 +8,8 @@ extern "C" {
 #define Cam1_width 160
 #define Cam1_height 120
 #define Cam1_size 19202
-#define Cam1_compressed_size 6440
-extern unsigned char Cam1_compressed[6440];
+#define Cam1_compressed_size 6039
+extern unsigned char Cam1_compressed[6039];
 
 #ifdef __cplusplus
 }

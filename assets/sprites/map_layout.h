@@ -6,10 +6,10 @@ extern "C" {
 #endif
 
 #define map_layout_width 160
-#define map_layout_height 240
-#define map_layout_size 38402
-#define map_layout_compressed_size 685
-extern unsigned char map_layout_compressed[685];
+#define map_layout_height 120
+#define map_layout_size 19202
+#define map_layout_compressed_size 598
+extern unsigned char map_layout_compressed[598];
 
 #ifdef __cplusplus
 }

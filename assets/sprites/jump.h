@@ -5,11 +5,11 @@
 extern "C" {
 #endif
 
-#define jump_width 320
-#define jump_height 240
-#define jump_size 76800
-#define jump_compressed_size 7592
-extern unsigned char jump_compressed[7592];
+#define jump_width 160
+#define jump_height 120
+#define jump_size 19200
+#define jump_compressed_size 2525
+extern unsigned char jump_compressed[2525];
 
 #ifdef __cplusplus
 }

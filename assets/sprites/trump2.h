@@ -8,8 +8,8 @@ extern "C" {
 #define trump2_width 160
 #define trump2_height 120
 #define trump2_size 19202
-#define trump2_compressed_size 5309
-extern unsigned char trump2_compressed[5309];
+#define trump2_compressed_size 5577
+extern unsigned char trump2_compressed[5577];
 
 #ifdef __cplusplus
 }

@@ -5,11 +5,11 @@
 extern "C" {
 #endif
 
-#define scaryhawking_width 320
-#define scaryhawking_height 240
-#define scaryhawking_size 76800
-#define scaryhawking_compressed_size 20071
-extern unsigned char scaryhawking_compressed[20071];
+#define scaryhawking_width 160
+#define scaryhawking_height 120
+#define scaryhawking_size 19200
+#define scaryhawking_compressed_size 6256
+extern unsigned char scaryhawking_compressed[6256];
 
 #ifdef __cplusplus
 }

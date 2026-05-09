@@ -8,8 +8,8 @@ extern "C" {
 #define ep4_width 160
 #define ep4_height 120
 #define ep4_size 19202
-#define ep4_compressed_size 743
-extern unsigned char ep4_compressed[743];
+#define ep4_compressed_size 736
+extern unsigned char ep4_compressed[736];
 
 #ifdef __cplusplus
 }

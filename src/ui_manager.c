@@ -17,7 +17,9 @@
 #include "sprites.h"
 #include "decomp_buf.h"
 
-#define OFFICE_W 255
+#define OFFICE_W 160
+#define SPR_W    160
+#define SPR_H    120
 
 /* =========================================================
  * DECOMPRESSION

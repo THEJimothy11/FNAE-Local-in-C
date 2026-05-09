@@ -6,10 +6,10 @@ extern "C" {
 #endif
 
 #define exp2_width 160
-#define exp2_height 40
-#define exp2_size 6402
-#define exp2_compressed_size 992
-extern unsigned char exp2_compressed[992];
+#define exp2_height 120
+#define exp2_size 19202
+#define exp2_compressed_size 4105
+extern unsigned char exp2_compressed[4105];
 
 #ifdef __cplusplus
 }
