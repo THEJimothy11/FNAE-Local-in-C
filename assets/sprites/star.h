@@ -5,11 +5,11 @@
 extern "C" {
 #endif
 
-#define star_width 32
-#define star_height 32
-#define star_size 1026
-#define star_compressed_size 90
-extern unsigned char star_compressed[90];
+#define star_width 160
+#define star_height 120
+#define star_size 19202
+#define star_compressed_size 487
+extern unsigned char star_compressed[487];
 
 #ifdef __cplusplus
 }

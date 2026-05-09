@@ -5,11 +5,11 @@
 extern "C" {
 #endif
 
-#define fa3_width 80
-#define fa3_height 80
-#define fa3_size 6402
-#define fa3_compressed_size 293
-extern unsigned char fa3_compressed[293];
+#define fa3_width 160
+#define fa3_height 120
+#define fa3_size 19202
+#define fa3_compressed_size 531
+extern unsigned char fa3_compressed[531];
 
 #ifdef __cplusplus
 }
